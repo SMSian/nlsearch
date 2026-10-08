@@ -1,0 +1,74 @@
+name: release
+
+# Push a tag like v0.1-9.5.5 and this builds the plugin for that
+# Elasticsearch version, puts the zip on the Releases page and publishes the
+# jar to GitHub Packages.
+# The last part of the tag is the Elasticsearch version, the rest is ours.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # create the release
+  packages: write   # publish the jar to GitHub Packages
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: read the versions from the tag
+        id: tag
+        run: |
+          tag=${GITHUB_REF_NAME#v}                 # v0.1-9.5.5 -> 0.1-9.5.5
+          case "$tag" in
+            *-[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "the tag has to look like v<plugin version>-<elasticsearch version>, e.g. v0.1-9.5.5"; exit 1;;
+          esac
+          echo "es=${tag##*-}" >> "$GITHUB_OUTPUT"      # 9.5.5
+          echo "plugin=${tag%-*}" >> "$GITHUB_OUTPUT"   # 0.1
+
+      - run: ./gradlew test bundle -PpluginVersion=${{ steps.tag.outputs.plugin }} -PesVersion=${{ steps.tag.outputs.es }}
+
+      - name: publish the jar to GitHub Packages
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
+        # the targeted task rather than the catch-all `publish`
+        run: |
+          set +e
+          out=$(./gradlew publishMavenPublicationToGitHubPackagesRepository \
+                  -PpluginVersion=${{ steps.tag.outputs.plugin }} \
+                  -PesVersion=${{ steps.tag.outputs.es }} 2>&1)
+          code=$?
+          echo "$out"
+          if [ $code -ne 0 ]; then
+            # A published Maven version is immutable, so re-running a tag gets a 409.
+            # That is expected, not a failure, and must not stop the release below.
+            if echo "$out" | grep -q "status code 409"; then
+              echo "::notice::This version is already in GitHub Packages and cannot be replaced. Carrying on."
+            else
+              exit $code
+            fi
+          fi
+
+      - name: publish on the releases page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$GITHUB_REF_NAME" in *alpha*|*beta*|*rc*) flags="--prerelease";; esac
+          # so that moving a tag and pushing it again just redoes the release
+          gh release delete "$GITHUB_REF_NAME" --yes || true
+          gh release create "$GITHUB_REF_NAME" build/distributions/*.zip \
+            --title "nlsearch ${{ steps.tag.outputs.plugin }} for Elasticsearch ${{ steps.tag.outputs.es }}" \
+            --generate-notes $flags

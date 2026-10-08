@@ -1,0 +1,28 @@
+meta {
+  name: 06 the default both
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "how many products are out of stock"
+  }
+}
+
+docs {
+  What you get back - the default, both
+
+  Send nothing for "response" and you get both halves:
+
+    "response"  a sentence a person can read, written by the model from what Elasticsearch returned
+    "result"    the Elasticsearch response itself
+
+  A chat bot usually wants exactly this: show the sentence, keep the data for the table underneath.
+}

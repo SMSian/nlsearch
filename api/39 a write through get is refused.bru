@@ -1,0 +1,17 @@
+meta {
+  name: 39 a write through get is refused
+  type: http
+  seq: 39
+}
+
+get {
+  url: {{host}}/_nl?q=delete+the+orders+index
+  body: none
+  auth: inherit
+}
+
+docs {
+  Guard rails - a write through GET is refused
+
+  400. A GET may only search, read mappings or list indices.
+}

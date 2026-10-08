@@ -1,0 +1,5 @@
+# Elasticsearch locks plugins down by default. We talk to the model over HTTP,
+# and the JDK http client starts its own threads.
+ALL-UNNAMED:
+  - outbound_network
+  - manage_threads

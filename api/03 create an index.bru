@@ -1,0 +1,23 @@
+meta {
+  name: 03 create an index
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "create an index called products with a name, a category, a price, whether it is in stock and the date it was added"
+  }
+}
+
+docs {
+  Set up something to play with - create an index
+
+  create_index. The model picks the field types: text with a keyword sub-field for the name, keyword for the category, float, boolean, date.
+}

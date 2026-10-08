@@ -1,0 +1,36 @@
+meta {
+  name: 45 put everything back
+  type: http
+  seq: 45
+}
+
+put {
+  url: {{host}}/_cluster/settings
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "persistent": {
+      "nlsearch.provider": null,
+      "nlsearch.model": null,
+      "nlsearch.url": null,
+      "nlsearch.api_key": null,
+      "nlsearch.timeout": null
+    },
+    "transient": {
+      "nlsearch.provider": null,
+      "nlsearch.model": null,
+      "nlsearch.url": null,
+      "nlsearch.api_key": null,
+      "nlsearch.timeout": null
+    }
+  }
+}
+
+docs {
+  Settings - put everything back
+
+  Null clears an override, so the node falls back to elasticsearch.yml. Clearing both halves leaves the node exactly as it was before this folder, which is why this request is last.
+}

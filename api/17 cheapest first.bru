@@ -1,0 +1,23 @@
+meta {
+  name: 17 cheapest first
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "show the 3 cheapest products"
+  }
+}
+
+docs {
+  Ordering - cheapest first
+
+  sort plus size. Ask for an order and you get a sort; ask for a number and you get a size.
+}

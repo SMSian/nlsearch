@@ -1,0 +1,21 @@
+meta {
+  name: 25 read the stored history
+  type: http
+  seq: 25
+}
+
+get {
+  url: {{host}}/.nlsearch-history/_doc/{{session}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  Chat bots: sessions and history - read the stored history
+
+  One document per session, holding the last 10 turns. Each turn is the prompt, the JSON the model answered with, and the outcome.
+
+  The outcome line is what makes follow-ups work: after a search it carries the ids and names of the first hits, so a later "make it 22" knows which document is meant. After a failure it carries the error so the model can correct itself.
+
+  The index is created on the first request that carries a session, so this returns 404 until then.
+}

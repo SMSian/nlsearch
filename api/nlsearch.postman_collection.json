@@ -1,0 +1,1461 @@
+{
+  "info": {
+    "name": "nlsearch",
+    "description": "Talk to Elasticsearch in plain English through the _nl endpoint.\n\nSet the host variable to your node. Every answer carries \"response\", a sentence a \nperson can read, and \"result\", what Elasticsearch returned. Send \"response\": \"explain\" \nfor the sentence alone or \"raw\" for the data alone. The requests under \"Chat bots: \nsessions and history\" are meant to be run in order; they share the session variable \nand show how a conversation is kept.\n\nhttps://smsian.github.io/nlsearch/",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "host",
+      "value": "http://localhost:9200",
+      "type": "string"
+    },
+    {
+      "key": "session",
+      "value": "demo",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Look around",
+      "description": "",
+      "item": [
+        {
+          "name": "is the plugin loaded",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/_cat/plugins?v",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_cat",
+                "plugins"
+              ],
+              "query": [
+                {
+                  "key": "v",
+                  "value": null
+                }
+              ]
+            },
+            "description": "The plugin shows up as nlsearch with the version it was built for. If this is empty the node did not load it; the log says why."
+          },
+          "response": []
+        },
+        {
+          "name": "what indices are there",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/_cat/indices?v",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_cat",
+                "indices"
+              ],
+              "query": [
+                {
+                  "key": "v",
+                  "value": null
+                }
+              ]
+            },
+            "description": "Ordinary Elasticsearch. Useful before and after the requests that change things."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Set up something to play with",
+      "description": "",
+      "item": [
+        {
+          "name": "create an index",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "create_index. The model picks the field types: text with a keyword sub-field for the name, keyword for the category, float, boolean, date.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"create an index called products with a name, a category, a price, whether it is in stock and the date it was added\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "add one product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "index. No id was given so Elasticsearch makes one up, and the response comes back 201 like the normal index API.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"add a product called Red Running Shoe in category shoes, price 49.9, in stock, added today\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "add several products",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "bulk. One request, several documents.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"add these products: Blue Mug in kitchen for 12.5 in stock, Black Kettle in kitchen for 35 out of stock, Green Sandal in shoes for 20 in stock, Office Chair in furniture for 120 in stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "What you get back",
+      "description": "",
+      "item": [
+        {
+          "name": "the default, both",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "Send nothing for \"response\" and you get both halves:\n\n  \"response\"  a sentence a person can read, written by the model from what Elasticsearch returned\n  \"result\"    the Elasticsearch response itself\n\nA chat bot usually wants exactly this: show the sentence, keep the data for the table underneath.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"how many products are out of stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "explain, the sentence on its own",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "\"response\": \"explain\" drops \"result\" and leaves the sentence. Good when the answer goes straight to a person and nothing is going to read the data.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"how many products are out of stock\",\n  \"response\": \"explain\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "raw, the data on its own",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "\"response\": \"raw\" gives you \"result\" and nothing else: exactly what Elasticsearch answered, and no second call to the model, so it is the fastest of the three.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"how many products are out of stock\",\n  \"response\": \"raw\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "a sentence about a list",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "The explanation names the real items and prices out of the response. It never invents a value, and when a search finds nothing it says so.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"the three cheapest things in stock\",\n  \"response\": \"explain\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "quoting something to be exact",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "Text in quotes is taken literally: the same capitals, the same spacing, the same words. Use it when you want one specific thing rather than whatever the words happen to match.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"how many 'Red Running Shoe' are there in stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Searching",
+      "description": "",
+      "item": [
+        {
+          "name": "plain search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "A full text match on the name and a range filter on the price, in one bool query.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"red shoes under 50\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "a condition on a keyword field",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "Words that are values of a keyword field become term filters rather than a text search.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"kitchen stuff thats actually in stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "search without naming the index",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "Nothing in the sentence names an index, a field or a value. The model works out all three from the mappings and the sample documents it is shown.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"anything going for less than 30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Counting and grouping",
+      "description": "",
+      "item": [
+        {
+          "name": "how many",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "A search with size 0; the count comes back in hits.total.value.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"how many products are out of stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "count per group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "A terms aggregation. Results are under result.aggregations.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"how many products are there in each category\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "an average per group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "A terms aggregation with an avg inside it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"average price per category\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Ordering",
+      "description": "",
+      "item": [
+        {
+          "name": "cheapest first",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "sort plus size. Ask for an order and you get a sort; ask for a number and you get a size.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"show the 3 cheapest products\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "the single best",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "A superlative becomes a sort with size 1. It uses price because that is a field this collection actually creates; ask for the best rated and you get an honest error, since nothing here has a rating.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"whats the most expensive thing we sell\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chat bots: sessions and history",
+      "description": "",
+      "item": [
+        {
+          "name": "1 - start a conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "Everything in this folder sends the same session, set in the collection variables. That one field is all a bot needs: nothing to open, nothing to close.\n\nRun these five in order and watch the body field change rather than reset.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"show me shoes\",\n  \"session\": \"{{session}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2 - narrow it down",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "\"the ones\" only means something because of the previous turn. The model starts from its own previous query and adds a filter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"only the ones in stock\",\n  \"session\": \"{{session}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3 - change the order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "Still the same query, now with a sort. Each turn keeps what came before.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"cheapest first\",\n  \"session\": \"{{session}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4 - and a limit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "Adds a size. Three turns of context, all from one session string.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"just the top two\",\n  \"session\": \"{{session}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5 - a pronoun that would delete things",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "dry_run is on, so this only shows the plan. Note that \"those\" resolves to the query built up over the previous turns. Run anything destructive this way first.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"delete those\",\n  \"session\": \"{{session}}\",\n  \"dry_run\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "the same question with no session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "The same sentence as turn 2, without a session. There is nothing to refer back to, so the model has to guess. This is the difference the session makes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"only the ones in stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "read the stored history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/.nlsearch-history/_doc/{{session}}",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                ".nlsearch-history",
+                "_doc",
+                "{{session}}"
+              ]
+            },
+            "description": "One document per session, holding the last 10 turns. Each turn is the prompt, the JSON the model answered with, and the outcome.\n\nThe outcome line is what makes follow-ups work: after a search it carries the ids and names of the first hits, so a later \"make it 22\" knows which document is meant. After a failure it carries the error so the model can correct itself.\n\nThe index is created on the first request that carries a session, so this returns 404 until then."
+          },
+          "response": []
+        },
+        {
+          "name": "which conversations exist",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/.nlsearch-history/_search?size=50&_source=updated",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                ".nlsearch-history",
+                "_search"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "50"
+                },
+                {
+                  "key": "_source",
+                  "value": "updated"
+                }
+              ]
+            },
+            "description": "The index is an ordinary one, so you can look through it, snapshot it, or expire old conversations with an ILM policy."
+          },
+          "response": []
+        },
+        {
+          "name": "expire old conversations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/.nlsearch-history/_delete_by_query",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                ".nlsearch-history",
+                "_delete_by_query"
+              ]
+            },
+            "description": "Nothing expires by itself. If you run many short conversations, put something like this on a schedule.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": {\n    \"range\": {\n      \"updated\": {\n        \"lt\": \"now-30d\"\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "forget this conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/.nlsearch-history/_doc/{{session}}",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                ".nlsearch-history",
+                "_doc",
+                "{{session}}"
+              ]
+            },
+            "description": "The next request with this session starts clean."
+          },
+          "response": []
+        },
+        {
+          "name": "forget every conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/.nlsearch-history",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                ".nlsearch-history"
+              ]
+            },
+            "description": "The index is recreated, hidden, on the next request that carries a session."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Writing",
+      "description": "",
+      "item": [
+        {
+          "name": "update one document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "There is no id here, only a description, so this has to become an update_by_query whose query finds the mug. Give a real id instead (\"set the price of product 1 to 14\") and it becomes a plain update.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"set the price of the Blue Mug to 14\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "change many at once",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "update_by_query with a painless script.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"give everything in the kitchen category a 10 percent discount\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete by description",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "delete_by_query. Deletions only happen when you clearly ask for one.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"remove all products that are out of stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Indices and mappings",
+      "description": "",
+      "item": [
+        {
+          "name": "add a field",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "put_mapping.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"add a keyword field called brand to the products index\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "show the mapping",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "get_mapping.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"what fields does the products index have\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "list the indices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "list_indices. The chat history index is hidden and never appears here.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"which indices do I have\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete an index",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "delete_index. Only ever runs against one named index, never a pattern.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"delete the products index\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Guard rails",
+      "description": "",
+      "item": [
+        {
+          "name": "dry run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "Returns the plan with dry_run true and no result. Nothing ran.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"delete the products index\",\n  \"dry_run\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "something it cannot do",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "The model answers with action reply and a text field saying what the problem is, instead of inventing a query.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"what is the weather like in Chennai\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "a write through GET is refused",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/_nl?q=delete+the+orders+index",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "delete+the+orders+index"
+                }
+              ]
+            },
+            "description": "400. A GET may only search, read mappings or list indices."
+          },
+          "response": []
+        },
+        {
+          "name": "the history index is off limits",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "400. The model is not allowed to touch the index that holds the conversations.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"delete the .nlsearch-history index\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "no prompt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_nl",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_nl"
+              ]
+            },
+            "description": "400 with a message saying what to send.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "description": "",
+      "item": [
+        {
+          "name": "see the settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/_cluster/settings?include_defaults=false",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_cluster",
+                "settings"
+              ],
+              "query": [
+                {
+                  "key": "include_defaults",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "The API key is filtered out of this and of the nodes API."
+          },
+          "response": []
+        },
+        {
+          "name": "switch model",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_cluster/settings",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_cluster",
+                "settings"
+              ]
+            },
+            "description": "Takes effect on the next request, no restart. Provider, model, url, api_key and timeout can all be changed this way.\n\nllama3.2:3b is a 3B model and a fair look at the lower limit: it answers single questions but loses the thread on follow-ups.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transient\": {\n    \"nlsearch.model\": \"llama3.2:3b\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "use a hosted model",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_cluster/settings",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_cluster",
+                "settings"
+              ]
+            },
+            "description": "provider openai also covers anything with an OpenAI compatible API: Groq, Together, DeepSeek, OpenRouter, LM Studio, vLLM. Point nlsearch.url at it.\n\nMIND THIS ONE. The key here is a placeholder, and persistent settings survive a restart, so until you run the request below every request will fail with an invalid key.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"persistent\": {\n    \"nlsearch.provider\": \"openai\",\n    \"nlsearch.model\": \"gpt-4o-mini\",\n    \"nlsearch.api_key\": \"sk-...\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "put everything back",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{host}}/_cluster/settings",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "_cluster",
+                "settings"
+              ]
+            },
+            "description": "Null clears an override, so the node falls back to elasticsearch.yml. Clearing both halves leaves the node exactly as it was before this folder, which is why this request is last.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"persistent\": {\n    \"nlsearch.provider\": null,\n    \"nlsearch.model\": null,\n    \"nlsearch.url\": null,\n    \"nlsearch.api_key\": null,\n    \"nlsearch.timeout\": null\n  },\n  \"transient\": {\n    \"nlsearch.provider\": null,\n    \"nlsearch.model\": null,\n    \"nlsearch.url\": null,\n    \"nlsearch.api_key\": null,\n    \"nlsearch.timeout\": null\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

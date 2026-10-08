@@ -1,0 +1,26 @@
+meta {
+  name: 19 1  start a conversation
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "show me shoes",
+    "session": "{{session}}"
+  }
+}
+
+docs {
+  Chat bots: sessions and history - 1 - start a conversation
+
+  Everything in this folder sends the same session, set in the collection variables. That one field is all a bot needs: nothing to open, nothing to close.
+
+  Run these five in order and watch the body field change rather than reset.
+}

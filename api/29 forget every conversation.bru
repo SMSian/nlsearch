@@ -1,0 +1,17 @@
+meta {
+  name: 29 forget every conversation
+  type: http
+  seq: 29
+}
+
+delete {
+  url: {{host}}/.nlsearch-history
+  body: none
+  auth: inherit
+}
+
+docs {
+  Chat bots: sessions and history - forget every conversation
+
+  The index is recreated, hidden, on the next request that carries a session.
+}

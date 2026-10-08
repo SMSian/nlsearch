@@ -1,0 +1,17 @@
+meta {
+  name: 42 see the settings
+  type: http
+  seq: 42
+}
+
+get {
+  url: {{host}}/_cluster/settings?include_defaults=false
+  body: none
+  auth: inherit
+}
+
+docs {
+  Settings - see the settings
+
+  The API key is filtered out of this and of the nodes API.
+}

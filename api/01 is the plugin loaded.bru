@@ -1,0 +1,17 @@
+meta {
+  name: 01 is the plugin loaded
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{host}}/_cat/plugins?v
+  body: none
+  auth: inherit
+}
+
+docs {
+  Look around - is the plugin loaded
+
+  The plugin shows up as nlsearch with the version it was built for. If this is empty the node did not load it; the log says why.
+}

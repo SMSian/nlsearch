@@ -1,0 +1,17 @@
+meta {
+  name: 02 what indices are there
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{host}}/_cat/indices?v
+  body: none
+  auth: inherit
+}
+
+docs {
+  Look around - what indices are there
+
+  Ordinary Elasticsearch. Useful before and after the requests that change things.
+}

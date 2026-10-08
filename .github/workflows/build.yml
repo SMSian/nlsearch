@@ -1,0 +1,42 @@
+name: build
+
+# Every branch including main, and every commit, so any commit can be
+# downloaded and tried. The version is always the one in build.gradle, 0.1, the
+# same as a release builds, so an artifact from a branch and the published zip
+# are the same thing built from different commits.
+# Tags are left to release.yml, which builds and publishes them properly.
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - run: ./gradlew test bundle sourcesJar
+
+      # Named for the commit, so a download says which one it came from.
+      # Holds the installable zip, the plugin jar and its sources.
+      - uses: actions/upload-artifact@v6
+        with:
+          name: nlsearch-${{ github.sha }}
+          path: |
+            build/distributions/*.zip
+            build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 90

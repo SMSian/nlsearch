@@ -1,0 +1,23 @@
+meta {
+  name: 14 how many
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "how many products are out of stock"
+  }
+}
+
+docs {
+  Counting and grouping - how many
+
+  A search with size 0; the count comes back in hits.total.value.
+}

@@ -1,0 +1,23 @@
+meta {
+  name: 05 add several products
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "add these products: Blue Mug in kitchen for 12.5 in stock, Black Kettle in kitchen for 35 out of stock, Green Sandal in shoes for 20 in stock, Office Chair in furniture for 120 in stock"
+  }
+}
+
+docs {
+  Set up something to play with - add several products
+
+  bulk. One request, several documents.
+}

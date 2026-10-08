@@ -1,0 +1,19 @@
+# gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ide
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+bin/
+out/
+
+# local stuff
+.DS_Store
+*.log
+.claude/

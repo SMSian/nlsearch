@@ -1,0 +1,23 @@
+meta {
+  name: 04 add one product
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "add a product called Red Running Shoe in category shoes, price 49.9, in stock, added today"
+  }
+}
+
+docs {
+  Set up something to play with - add one product
+
+  index. No id was given so Elasticsearch makes one up, and the response comes back 201 like the normal index API.
+}
