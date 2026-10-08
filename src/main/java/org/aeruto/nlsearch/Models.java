@@ -57,16 +57,40 @@ class Models {
         return current;
     }
 
+    /**
+     * The model that works out what the indices hold.
+     *
+     * Prose, like the explainer, but with room to work. A briefing for every index
+     * in one answer is several times the writing any other call does, and a 7B model
+     * on a laptop needs longer than a single request is allowed. So the timeout is
+     * the configured one per index rather than for all of them together, which is
+     * the thing that actually scales, and there is room for a longer answer.
+     *
+     * Not cached: it is used once per cluster and then the result is stored.
+     */
+    ChatModel study(int indices) {
+        return build(settings, false, Math.max(1, indices), 4096);
+    }
+
     static ChatModel build(Settings settings) {
         return build(settings, true);
     }
 
     static ChatModel build(Settings settings, boolean jsonOnly) {
+        return build(settings, jsonOnly, 1, 2048);
+    }
+
+    /** nlsearch.timeout, once per unit of work, so one long job is not judged by a single request's budget. */
+    static Duration timeout(Settings settings, int timeouts) {
+        return Duration.ofMillis(NLSettings.TIMEOUT.get(settings).millis()).multipliedBy(Math.max(1, timeouts));
+    }
+
+    static ChatModel build(Settings settings, boolean jsonOnly, int timeouts, int answerTokens) {
         String provider = NLSettings.PROVIDER.get(settings);
         String modelName = NLSettings.MODEL.get(settings);
         String url = NLSettings.URL.get(settings);
         String apiKey = NLSettings.API_KEY.get(settings);
-        Duration timeout = Duration.ofMillis(NLSettings.TIMEOUT.get(settings).millis());
+        Duration timeout = timeout(settings, timeouts);
 
         switch (provider) {
             case "ollama":
@@ -78,7 +102,7 @@ class Models {
                     // the rules, the mappings, the keyword values and ten turns of chat do not fit in
                     // ollama's default window, and it silently drops the oldest text when they overflow
                     .numCtx(16384)
-                    .numPredict(2048)
+                    .numPredict(answerTokens)
                     .maxRetries(0) // langchain4j would otherwise retry 3 times, we retry at the plan level
                     .timeout(timeout)
                     .build();
@@ -99,7 +123,7 @@ class Models {
                     .apiKey(apiKey)
                     .modelName(modelName)
                     .temperature(0.0)
-                    .maxTokens(2048)
+                    .maxTokens(answerTokens)
                     .maxRetries(0)
                     .timeout(timeout);
                 if (url.isEmpty() == false) {
@@ -112,7 +136,7 @@ class Models {
                     .apiKey(apiKey)
                     .modelName(modelName)
                     .temperature(0.0)
-                    .maxOutputTokens(2048)
+                    .maxOutputTokens(answerTokens)
                     .maxRetries(0)
                     .timeout(timeout);
                 if (url.isEmpty() == false) {

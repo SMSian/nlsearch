@@ -1,0 +1,25 @@
+meta {
+  name: 12 work it out now
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{host}}/_nl/analyze
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Understanding your data - work it out now
+
+  Looks at a couple of real documents for every value of every small keyword field, and writes down what the coded ones mean.
+
+  It decodes rather than transcribes: an index whose values are already words gets a one-line briefing saying there was nothing to decode, because every keyword value is sent with each request anyway.
+
+  You never have to call this: the first question about an index triggers it and the result is kept. Calling it at deploy time just means the first person to ask a question does not wait for it.
+}

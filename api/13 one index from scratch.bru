@@ -1,0 +1,23 @@
+meta {
+  name: 13 one index from scratch
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{host}}/_nl/analyze?force=true
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "index": "products"
+  }
+}
+
+docs {
+  Understanding your data - one index, from scratch
+
+  force=true redoes it even when what is stored is still fresh. Worth it after the data changes shape in a way the mapping does not show, since a mapping change already invalidates it by itself.
+}

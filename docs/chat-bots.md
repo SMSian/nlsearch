@@ -2,6 +2,8 @@
 title: Chat bots and sessions
 ---
 
+[Start](./) · [Installing](installing) · **Chat bots** · [Releasing](releasing) · [Troubleshooting](troubleshooting)
+
 nlsearch is one endpoint on purpose. A bot does not have to know index names or
 query DSL; it forwards what the person typed and gets back what happened.
 
@@ -116,6 +118,10 @@ something like that on a schedule.
   still succeeds and the failure is logged. You never get an error because of
   history.
 - **Nothing is shared between sessions.** Two sessions never see each other.
+- **A follow-up stays on the index the conversation is already about.** "now
+  only the ones in stock" narrows what you were just shown; it does not go
+  looking for a better-fitting index. To move to another index, name it.
+  Starting a new topic is what a new session is for.
 
 ## Showing the answer
 
@@ -154,11 +160,43 @@ the three. The top of the answer is unchanged in every mode: `action`, `index`,
 view.
 
 When `action` is `reply`, nothing ran and `text` is a sentence to show the user
-as is: the request was not about the data, or something was missing.
+as is: the request was not about the data, something was missing, or two
+different fields would each have answered the words and it is asking which you
+meant. Show
+it and let them answer in the same session. A bot that treats `reply` as a
+failure throws away the one safe move available when a question is ambiguous.
 
 Errors come back as normal Elasticsearch errors with a `reason` written for a
 person, so a bot can show it: 400 when the plan was refused, 404 for an index
 that is not there, 502 when the model is unreachable or produced nonsense.
+
+## Teaching it about your data
+
+A bot is only as good as what the model knows about the indices behind it. Field
+names like `dept`, `status_flag` and `vendor_cd` mean nothing on their own, and
+a model asked to guess will guess confidently and wrongly.
+
+`POST /_nl/analyze` looks at real documents and writes down what the fields and
+their coded values mean. It happens automatically on the first question and is
+then kept, so a bot does not have to do anything. It only decodes: an index
+whose values are already words gets a one-line briefing saying there was nothing
+to decode, because every keyword value is sent with each request anyway. Two
+things are worth doing deliberately though:
+
+- **Call it once at deploy time**, so the first person to ask a question does not
+  pay for it.
+- **Call it with a `session`** when a conversation reveals something the data
+  does not say. The briefing is then kept for that conversation alone:
+
+  ```bash
+  curl -XPOST localhost:9200/_nl/analyze \
+    -H 'Content-Type: application/json' \
+    -d '{"index": "inventory", "session": "chat-123", "force": true}'
+  ```
+
+`GET /_nl/analyze` shows what it currently believes, which is the first place to
+look when an answer comes back wrong: usually the briefing has a field's meaning
+wrong, and that is visible in one read.
 
 ## Keeping users safe
 
@@ -178,4 +216,6 @@ that is not there, 502 when the model is unreachable or produced nonsense.
 
 ---
 
-[Back to the start](./)
+[Start](./) · [Installing](installing) · **Chat bots** · [Releasing](releasing) · [Troubleshooting](troubleshooting)
+
+[Repository](https://github.com/sheikmohammedsha/nlsearch) · [Releases](https://github.com/sheikmohammedsha/nlsearch/releases) · [Wiki](https://github.com/sheikmohammedsha/nlsearch/wiki) · [Report a problem](https://github.com/sheikmohammedsha/nlsearch/issues)

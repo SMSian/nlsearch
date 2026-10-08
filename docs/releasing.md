@@ -2,7 +2,9 @@
 title: Releasing and publishing
 ---
 
-This is the hands-on guide for the [nlsearch](https://github.com/SMSian/nlsearch)
+[Start](./) · [Installing](installing) · [Chat bots](chat-bots) · **Releasing** · [Troubleshooting](troubleshooting)
+
+This is the hands-on guide for the [nlsearch](https://github.com/sheikmohammedsha/nlsearch)
 repo: how the GitHub Actions build works, how a release gets onto the Releases
 page, how to publish the docs on the wiki and as a website, and what "making it
 live" means for this project. Everything here runs on GitHub's free tier.
@@ -17,15 +19,15 @@ so people can read it without cloning anything.
 A plugin only loads into the exact Elasticsearch version it was compiled
 against. So every release is named
 
-    <plugin version>-<elasticsearch version>      e.g.  0.1-9.5.5
+    <plugin version>-<elasticsearch version>      e.g.  0.2-9.5.5
 
 and the tag that produces it is the same with a `v` in front:
 
-    v0.1-9.5.5
+    v0.2-9.5.5
 
-The zip that ends up on the Releases page is `nlsearch-0.1-9.5.5.zip`.
+The zip that ends up on the Releases page is `nlsearch-0.2-9.5.5.zip`.
 When Elasticsearch 9.5.6 comes out you do not change any code, you push a tag
-`v0.1-9.5.6` and a new release appears, built against 9.5.6.
+`v0.2-9.5.6` and a new release appears, built against 9.5.6.
 
 ## 2. The GitHub Actions build (CI)
 
@@ -66,9 +68,9 @@ to try it. Actions tab -> pick the run -> the artifact is at the bottom of the
 run page, named after the commit, holding:
 
 ```
-nlsearch-0.1-9.5.5.zip        install this with elasticsearch-plugin
-nlsearch-0.1.jar              the plugin classes
-nlsearch-0.1-sources.jar      the source, for an IDE
+nlsearch-0.2-9.5.5.zip        install this with elasticsearch-plugin
+nlsearch-0.2.jar              the plugin classes
+nlsearch-0.2-sources.jar      the source, for an IDE
 ```
 
 The version is the one in `build.gradle` whichever branch it came from, the
@@ -80,27 +82,27 @@ the same thing from different commits. They are kept for 90 days.
 From your machine, on the `main` branch, with everything committed:
 
 ```bash
-git tag v0.1-9.5.5
-git push origin v0.1-9.5.5
+git tag v0.2-9.5.5
+git push origin v0.2-9.5.5
 ```
 
 That is all. Within a few minutes the Releases page
-(https://github.com/SMSian/nlsearch/releases) shows "nlsearch 0.1 for
-Elasticsearch 9.5.5" with `nlsearch-0.1-9.5.5.zip` attached and release
+(https://github.com/sheikmohammedsha/nlsearch/releases) shows "nlsearch 0.2 for
+Elasticsearch 9.5.5" with `nlsearch-0.2-9.5.5.zip` attached and release
 notes generated from the commits. Tags containing `alpha`, `beta` or `rc` are
 marked as pre-releases automatically.
 
 Anyone can then install the plugin straight from that URL:
 
 ```bash
-bin/elasticsearch-plugin install https://github.com/SMSian/nlsearch/releases/download/v0.1-9.5.5/nlsearch-0.1-9.5.5.zip
+bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.2-9.5.5/nlsearch-0.2-9.5.5.zip
 ```
 
 ### Releasing for another Elasticsearch version
 
 ```bash
-git tag v0.1-9.5.6
-git push origin v0.1-9.5.6
+git tag v0.2-9.5.6
+git push origin v0.2-9.5.6
 ```
 
 The workflow takes the last part of the tag as the Elasticsearch version and
@@ -109,24 +111,24 @@ against the plugin, the release fails and the Actions log tells you why.
 
 ### Bumping the plugin version
 
-The default plugin version is in `build.gradle` (`version = ... '0.1'`).
-The release workflow overrides it from the tag (`-PpluginVersion=0.1`),
+The default plugin version is in `build.gradle` (`version = ... '0.2'`).
+The release workflow overrides it from the tag (`-PpluginVersion=0.2`),
 so a tag `v0.2-9.5.5` releases as 0.2 without editing anything. Update the
 default in `build.gradle` too when you move on, so local builds match.
 
 ### If you would rather do it by hand
 
 Build locally (`./gradlew bundle`), then on GitHub: Releases -> **Draft a new
-release** -> choose or create the tag `v0.1-9.5.5` -> title
-"nlsearch 0.1 for Elasticsearch 9.5.5" -> drag
-`build/distributions/nlsearch-0.1-9.5.5.zip` into the assets box -> tick
+release** -> choose or create the tag `v0.2-9.5.5` -> title
+"nlsearch 0.2 for Elasticsearch 9.5.5" -> drag
+`build/distributions/nlsearch-0.2-9.5.5.zip` into the assets box -> tick
 "pre-release" -> Publish. A ready-built copy of that zip is next to this file in
 your Downloads folder.
 
 ### Deleting a bad release
 
 Releases page -> the release -> Delete. Then delete the tag:
-`git push origin :refs/tags/v0.1-9.5.5` and `git tag -d v0.1-9.5.5`.
+`git push origin :refs/tags/v0.2-9.5.5` and `git tag -d v0.2-9.5.5`.
 Push the tag again after fixing things.
 
 ## 4. The wiki
@@ -134,7 +136,7 @@ Push the tag again after fixing things.
 The wiki is a separate git repository next to the main one. GitHub only creates
 it when the first page is made through the website, so:
 
-1. Open https://github.com/SMSian/nlsearch/wiki and click **Create the first
+1. Open https://github.com/sheikmohammedsha/nlsearch/wiki and click **Create the first
    page**. Call it `Home`, paste this document, save. (Ready-made pages are in
    `~/Downloads/nlsearch-wiki/`: `Home.md`, `Installing.md`,
    `Chat-bots-and-sessions.md`, `Troubleshooting.md`. Once the first page
@@ -142,17 +144,34 @@ it when the first page is made through the website, so:
 2. From then on it can be edited either on the website or with git:
 
    ```bash
-   git clone git@github.com:SMSian/nlsearch.wiki.git
+   git clone git@github.com:sheikmohammedsha/nlsearch.wiki.git
    cd nlsearch.wiki
    # edit Home.md, add pages like Installing.md, Chat-bots.md ...
    git add . && git commit -m "update" && git push
    ```
 
-   Every `.md` file becomes a page; the file name is the page title.
+   Every `.md` file becomes a page; the file name is the page title. Two names
+   are special: `_Sidebar.md` is rendered beside every page and `_Footer.md`
+   under every page, which is how the wiki gets navigation. Neither has an
+   equivalent on the site, where the row of links at the top and bottom of each
+   page does the same job.
 
 Settings -> General -> Features -> **Wikis** has to be ticked (it is by
 default) and, if you want only you to edit it, tick "Restrict editing to
 collaborators only". Reading is public for a public repo.
+
+The wiki pages are generated from `docs/` rather than written twice. The Jekyll
+front matter is stripped, the site's navigation rows are swapped for wiki ones
+because the link targets differ, and the sidebar and footer are added. Keeping
+one source means the two cannot drift.
+
+Two things to watch if you write that script yourself. Match the navigation rows
+by their shape, a single line of entries separated by middle dots, not by the
+first link in the row: the current page is bold rather than linked, so a pattern
+anchored to a link strips the rows on every page except the one you are looking
+at. And keep the rows plain markdown. A kramdown attribute such as `{: .nav }`
+styles them nicely on the site and is printed as literal text by the wiki and by
+GitHub's own file view.
 
 Suggested pages: `Home` (this guide), `Installing`, `Settings and providers`,
 `Chat bots and sessions`, `Troubleshooting`.
@@ -160,7 +179,7 @@ Suggested pages: `Home` (this guide), `Installing`, `Settings and providers`,
 ## 5. The documentation site (GitHub Pages)
 
 The `docs/` folder in the repository is published as a website at
-<https://smsian.github.io/nlsearch/>. It is plain Markdown rendered by Jekyll
+<https://sheikmohammedsha.github.io/nlsearch/>. It is plain Markdown rendered by Jekyll
 with one of GitHub's built-in themes, set in `docs/_config.yml`.
 
 To turn it on, once:
@@ -201,10 +220,10 @@ What goes up, under `org.aeruto:nlsearch:<plugin>-<elasticsearch>`:
 
 | file | what it is |
 |---|---|
-| `nlsearch-0.1-9.5.5.jar` | the plugin classes on their own |
-| `nlsearch-0.1-9.5.5-sources.jar` | the source, so an IDE can step into it |
-| `nlsearch-0.1-9.5.5-plugin.zip` | the installable bundle, the same one as on the Releases page |
-| `nlsearch-0.1-9.5.5.pom` | the dependencies |
+| `nlsearch-0.2-9.5.5.jar` | the plugin classes on their own |
+| `nlsearch-0.2-9.5.5-sources.jar` | the source, so an IDE can step into it |
+| `nlsearch-0.2-9.5.5-plugin.zip` | the installable bundle, the same one as on the Releases page |
+| `nlsearch-0.2-9.5.5.pom` | the dependencies |
 
 **To install the plugin you still want the zip**, either from the Releases page
 or the `-plugin.zip` above. The bare jar is not installable on its own: it holds
@@ -216,7 +235,7 @@ Using it from another project, with Gradle:
 ```groovy
 repositories {
     maven {
-        url = uri('https://maven.pkg.github.com/SMSian/nlsearch')
+        url = uri('https://maven.pkg.github.com/sheikmohammedsha/nlsearch')
         credentials {
             username = findProperty('gpr.user')
             password = findProperty('gpr.key')
@@ -225,7 +244,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'org.aeruto:nlsearch:0.1-9.5.5'
+    compileOnly 'org.aeruto:nlsearch:0.2-9.5.5'
 }
 ```
 
@@ -234,13 +253,13 @@ or Maven:
 ```xml
 <repository>
   <id>github</id>
-  <url>https://maven.pkg.github.com/SMSian/nlsearch</url>
+  <url>https://maven.pkg.github.com/sheikmohammedsha/nlsearch</url>
 </repository>
 
 <dependency>
   <groupId>org.aeruto</groupId>
   <artifactId>nlsearch</artifactId>
-  <version>0.1-9.5.5</version>
+  <version>0.2-9.5.5</version>
 </dependency>
 ```
 
@@ -259,7 +278,7 @@ GITHUB_ACTOR=<you> GITHUB_TOKEN=<token> ./gradlew publish
 
 Packages show up under the repository's **Packages** section on the right of
 the code page, and at
-<https://github.com/SMSian/nlsearch/packages>. Deleting a published version is
+<https://github.com/sheikmohammedsha/nlsearch/packages>. Deleting a published version is
 done from there; a version cannot be overwritten, so a re-released tag needs
 the old version deleted first if the contents changed.
 
@@ -271,7 +290,7 @@ In order:
    Bruno collection and the two workflows. Nothing else; local Elasticsearch,
    Ollama, build output and IDE files are ignored by `.gitignore`.
 2. **CI green**: the `build` workflow passes on `main` (Actions tab).
-3. **Release**: push the tag `v0.1-9.5.5`; check the Releases page shows
+3. **Release**: push the tag `v0.2-9.5.5`; check the Releases page shows
    the zip.
 4. **README points at it**: the install command in the README uses the release
    URL, so it works the moment the release exists.
@@ -290,17 +309,18 @@ has the three commands.
 ## 8. Local build, for reference
 
 ```bash
-git clone git@github.com:SMSian/nlsearch.git
+git clone git@github.com:sheikmohammedsha/nlsearch.git
 cd nlsearch
 ./gradlew test            # unit tests
-./gradlew bundle          # build/distributions/nlsearch-0.1-9.5.5.zip
+./gradlew bundle          # build/distributions/nlsearch-0.2-9.5.5.zip
 ./gradlew bundle -PesVersion=9.5.4   # for another Elasticsearch version
 ```
 
 Needs JDK 21 or newer on the machine that builds; the plugin itself runs on the
 JDK bundled with Elasticsearch.
 
-
 ---
 
-[Back to the start](./)
+[Start](./) · [Installing](installing) · [Chat bots](chat-bots) · **Releasing** · [Troubleshooting](troubleshooting)
+
+[Repository](https://github.com/sheikmohammedsha/nlsearch) · [Releases](https://github.com/sheikmohammedsha/nlsearch/releases) · [Wiki](https://github.com/sheikmohammedsha/nlsearch/wiki) · [Report a problem](https://github.com/sheikmohammedsha/nlsearch/issues)

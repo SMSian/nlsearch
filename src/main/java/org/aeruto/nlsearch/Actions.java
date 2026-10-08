@@ -1,6 +1,7 @@
 package org.aeruto.nlsearch;
 
 import org.elasticsearch.ElasticsearchStatusException;
+import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
@@ -75,6 +76,10 @@ final class Actions {
         throws IOException {
         if (History.INDEX.equals(plan.index())) {
             throw new Refused("[" + History.INDEX + "] is where nlsearch keeps the chat history, leave it alone");
+        }
+        if (Analysis.INDEX.equals(plan.index())) {
+            throw new Refused("[" + Analysis.INDEX + "] is where nlsearch keeps what it worked out about your data,"
+                + " leave it alone; POST /_nl/analyze?force=true rebuilds it");
         }
         switch (plan.action()) {
             case "search": {
@@ -201,6 +206,47 @@ final class Actions {
         return Strings.toString(builder);
     }
 
+    /**
+     * What to tell the model when its plan was rejected.
+     *
+     * Elasticsearch wraps the real complaint: the outer message of a bad query is
+     * "[1:87] [bool] failed to parse field [filter]", which says where but not what,
+     * and a model given only that rewrites the same mistake. The cause underneath it
+     * says "[term] query does not support [gt]", which is the whole answer. Both go
+     * in, because the position is useful too.
+     */
+    static String why(Throwable e) {
+        Throwable root = ExceptionsHelper.unwrapCause(e);
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String outer = e.getMessage();
+        String inner = root.getMessage();
+        if (inner == null || inner.equals(outer)) {
+            return String.valueOf(outer);
+        }
+        return outer == null ? inner : outer + ": " + inner;
+    }
+
+    /**
+     * How one hit is named in an outcome.
+     *
+     * Prose, because an outcome is read back by a model on the next turn. This used
+     * to say "[id 1] Red Running Shoe", and the model turned that into
+     * {"term": {"id": 1}} against an index with no id field: a valid query, zero
+     * results, no error anywhere.
+     */
+    static String describe(String id, Map<String, Object> source) {
+        if (source != null) {
+            for (String field : new String[] { "name", "title" }) {
+                if (source.get(field) != null) {
+                    return source.get(field) + " (document " + id + ")";
+                }
+            }
+        }
+        return "document " + id;
+    }
+
     /** One line on how it went, for the chat history. */
     static String summary(ActionResponse response) {
         if (response instanceof SearchResponse search) {
@@ -209,16 +255,7 @@ final class Actions {
             StringBuilder text = new StringBuilder(total == null ? "search done" : total.value() + " hits");
             SearchHit[] hits = search.getHits().getHits();
             for (int i = 0; i < hits.length && i < 5; i++) {
-                text.append(i == 0 ? ": " : ", ").append("[id ").append(hits[i].getId()).append("]");
-                Map<String, Object> source = hits[i].getSourceAsMap();
-                if (source != null) {
-                    for (String field : new String[] { "name", "title" }) {
-                        if (source.get(field) != null) {
-                            text.append(" ").append(source.get(field));
-                            break;
-                        }
-                    }
-                }
+                text.append(i == 0 ? ": " : ", ").append(describe(hits[i].getId(), hits[i].getSourceAsMap()));
             }
             return text.toString();
         }

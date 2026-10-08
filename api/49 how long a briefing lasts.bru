@@ -1,0 +1,27 @@
+meta {
+  name: 49 how long a briefing lasts
+  type: http
+  seq: 49
+}
+
+put {
+  url: {{host}}/_cluster/settings
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "transient": {
+      "nlsearch.analysis_ttl": "7d"
+    }
+  }
+}
+
+docs {
+  Settings - how long a briefing lasts
+
+  How long what the plugin worked out about an index stays good for. 24 hours by default.
+
+  A mapping change invalidates a briefing on its own, so this is about data that drifts without the mapping moving: new department codes, a status value that stops being used. Raise it for a static catalogue, lower it for data that changes shape weekly.
+}

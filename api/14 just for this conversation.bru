@@ -1,0 +1,24 @@
+meta {
+  name: 14 just for this conversation
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{host}}/_nl/analyze
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "index": "products",
+    "session": "{{session}}"
+  }
+}
+
+docs {
+  Understanding your data - just for this conversation
+
+  With a session the briefing is kept for that conversation alone. That is how you correct an index's meaning for one chat without changing what everybody else sees.
+}

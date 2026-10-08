@@ -1,0 +1,132 @@
+You are working out what some Elasticsearch indices hold, so that afterwards
+someone can ask questions in plain language and get the right query.
+
+For each index you are given its mapping, how many documents it holds, every
+value its small keyword fields contain, the span of its numbers and dates, and
+real documents chosen to cover each keyword value.
+
+The examples below describe an imaginary index called parcels, with fields
+route_cd and shelf_qty. They are there to show the shape and the level of detail
+wanted. Never mention parcels, route_cd or shelf_qty in what you write: every
+field you name must be one the mapping of that index actually spells out, and a
+field that is not there sends people looking for something that does not exist.
+Each briefing describes its own index and no other.
+
+Write one briefing per index. Start each with a line containing only
+
+## <the index name exactly as given>
+
+Then these parts, in this order, as plain lines of prose. No bullets, no bold,
+no backticks, no markdown of any kind, no preamble, no sign-off. Use the
+headings exactly as they are written below and add none of your own.
+
+1. One line saying what the index is a list of.
+
+2. One line per field: the field name exactly as the mapping spells it, what it
+   holds, and what sort of question it answers.
+
+3. Codes:
+   This is the most valuable part, so take care over it. For EVERY keyword field
+   whose values are codes, abbreviations or anything not plain English, give
+   EVERY value and what it means, on one line:
+       route_cd: NW = north west (Glasgow, Belfast, Carlisle), SE = south east
+       (Dover, Brighton, Hastings), MD = midlands (Derby, Coventry)
+   Work each meaning out from the documents carrying that value, and say what
+   each code stands for rather than that it is a code. "NW, SE, MD = route
+   codes" is worth nothing: saying which is which is the whole job.
+   What goes in the brackets is copied from those documents, never thought up.
+   The letters of a code are a hint and nothing more; what the documents under
+   it have in common is the answer, and where the two disagree the documents
+   win. Never give only one value and leave the rest to be guessed: a value you
+   skip is a question that will be answered wrongly. Where a value appears in no
+   document, or its documents have nothing in common, write that you could not
+   tell what it means rather than settle on the word its letters suggest.
+   Leave out fields whose values are names or identifiers rather than codes. An
+   id, an email address, a title, a person's name: listing those teaches nobody
+   anything and buries the lines that matter. Leave out fields whose values are
+   already plain English too. If a value says what it means on its own, there is
+   nothing here to decode, and writing "kitchen = kitchen" is worse than silence.
+   An index with no coded fields gets no Codes section at all.
+
+4. Words and filters:
+   One line per value, in this shape, and never more than one value on the right
+   of an arrow:
+       <the words people would use for it> -> <field> <value>
+   Cover every code from part 3, in both directions. Include plurals and the
+   everyday words, not just the formal ones. A field whose values are already
+   plain English needs nothing here: whoever reads this is shown every value of
+   every small keyword field anyway, so repeating them adds length and no
+   meaning.
+       north west, scotland, up north -> route_cd NW
+       south east, kent, down south -> route_cd SE
+       midlands, middle of the country -> route_cd MD
+       out of stock, none left, sold out, cannot send -> shelf_qty 0
+
+   Only values you were actually shown. Do not add one because you expect it to
+   exist.
+
+   Never use a name, title or description field on the right of an arrow. Those
+   are searched as text, and listing what they contain turns this into a copy of
+   the data instead of a guide to it.
+
+   Each phrase gets exactly ONE filter. Where two fields could both serve, pick
+   the one that literally measures the thing the phrase is about rather than one
+   that merely correlates with it, and say in part 5 which you chose and why.
+   Never list the same phrase twice pointing at two different fields: that is
+   worse than leaving it out, because whoever reads this will pick the wrong one.
+   If no field really carries a phrase, leave the phrase out. An invented
+   mapping is read as fact later and never questioned.
+
+   Do not invent combinations of two or three fields for phrases nobody has
+   asked yet, and do not put a number on a vague word unless the spans you were
+   given make it obvious.
+
+5. Watch out for:
+   Anything misleading, only where the data really shows it: a field whose name
+   suggests something it does not hold, two fields that could both be meant, a
+   status that is not what it sounds like. Where you had to choose between two
+   fields in part 4, say which you chose and what the other one really means.
+   A field that does exactly what its name says does not belong here. Saying
+   that a boolean called in_stock "is a boolean flag" tells nobody anything and
+   makes the real warnings harder to find. Write nothing under this heading
+   rather than fill it.
+   Before writing that the index has no field for something, read the list of
+   fields again. Saying a field is missing when it is right there is the most
+   damaging line this whole briefing can contain, because it stops anyone from
+   ever using it.
+   If something is genuinely unclear, say it is unclear; do not invent a meaning.
+
+6. Related indices:
+   If this index relates to another, say how, and say they still cannot be
+   queried together. Leave this out when it relates to nothing.
+
+Around 150 words per index.
+
+Here is a whole briefing for the imaginary parcels index, showing exactly what
+is wanted. Match this layout and this level of detail. Do not reuse anything in
+it: your indices are different ones.
+
+## parcels
+This index is a list of parcels waiting to go out.
+
+route_cd: the delivery route the parcel is on. Answers which part of the country something is going to.
+shelf_qty: how many are on the shelf right now. Answers whether something can be sent today.
+booked: the date the parcel was booked in. Answers when questions.
+weight_kg: the weight in kilograms. Answers how heavy, and sorts by size.
+recipient: who it is going to. Answers who questions.
+
+Codes:
+route_cd: NW = north west (Glasgow, Belfast, Carlisle), SE = south east (Dover, Brighton, Hastings), MD = midlands (Derby, Coventry)
+
+Words and filters:
+north west, scotland, up north -> route_cd NW
+south east, kent, down south -> route_cd SE
+midlands, middle of the country -> route_cd MD
+out of stock, none left, sold out, cannot send -> shelf_qty 0
+heavy, bulky -> weight_kg above 20
+
+Watch out for:
+There is no status field. A parcel with shelf_qty 0 is the nearest thing to one that cannot be sent, so that is what out of stock means here.
+
+Related indices:
+recipient holds the same names as the customers index, but the two cannot be queried together.

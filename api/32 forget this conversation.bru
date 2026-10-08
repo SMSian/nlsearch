@@ -1,0 +1,17 @@
+meta {
+  name: 32 forget this conversation
+  type: http
+  seq: 32
+}
+
+delete {
+  url: {{host}}/.nlsearch-history/_doc/{{session}}
+  body: none
+  auth: inherit
+}
+
+docs {
+  Chat bots: sessions and history - forget this conversation
+
+  The next request with this session starts clean.
+}

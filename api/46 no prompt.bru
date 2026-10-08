@@ -1,0 +1,21 @@
+meta {
+  name: 46 no prompt
+  type: http
+  seq: 46
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Guard rails - no prompt
+
+  400 with a message saying what to send.
+}

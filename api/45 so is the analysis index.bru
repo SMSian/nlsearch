@@ -1,0 +1,25 @@
+meta {
+  name: 45 so is the analysis index
+  type: http
+  seq: 45
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "delete the .nlsearch-analysis index"
+  }
+}
+
+docs {
+  Guard rails - so is the analysis index
+
+  400 as well, and the message points at POST /_nl/analyze?force=true, which is the supported way to have it rebuilt.
+
+  Both of the plugin's own indices are hidden system indices, so the model is never shown them; this guard is for when you name one yourself.
+}

@@ -17,7 +17,7 @@ POST /_nl
   "model": "ollama/qwen2.5-coder:7b",
   "action": "search",
   "index": "products",
-  "body": {"query": {"bool": {"must": [{"match": {"name": "red shoes"}}], "filter": [{"range": {"price": {"lt": 50}}}]}}},
+  "body": {"query": {"bool": {"must": [{"match": {"name": {"query": "red shoes", "operator": "and", "fuzziness": "AUTO"}}}], "filter": [{"term": {"category": "shoes"}}, {"range": {"price": {"lt": 50}}}]}}},
   "result": {"took": 3, "hits": {"total": {"value": 2, "relation": "eq"}, "hits": ["..."]}}
 }
 ```
@@ -31,7 +31,16 @@ anything with an OpenAI compatible API. Everything is picked in
 It is made for chat bots: a single endpoint, no index name in the url, and an
 optional `session` so follow-ups like "now only the ones in stock" work.
 
-Full documentation: <https://smsian.github.io/nlsearch/>
+**Documentation**, the same pages on the site and in the
+[wiki](https://github.com/sheikmohammedsha/nlsearch/wiki):
+
+| | |
+|---|---|
+| [Start](https://sheikmohammedsha.github.io/nlsearch/) | what it is, one request end to end, the settings |
+| [Installing](https://sheikmohammedsha.github.io/nlsearch/installing) | Elasticsearch, the plugin, and a model |
+| [Chat bots and sessions](https://sheikmohammedsha.github.io/nlsearch/chat-bots) | history, what comes back, keeping users safe |
+| [Releasing and publishing](https://sheikmohammedsha.github.io/nlsearch/releasing) | the CI, the Releases page, this site |
+| [Troubleshooting](https://sheikmohammedsha.github.io/nlsearch/troubleshooting) | what the errors mean |
 
 ## Install
 
@@ -46,7 +55,7 @@ ollama pull qwen2.5-coder:7b
 Then install the plugin and restart the node:
 
 ```
-bin/elasticsearch-plugin install https://github.com/SMSian/nlsearch/releases/download/v0.1-9.5.5/nlsearch-0.1-9.5.5.zip
+bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.2-9.5.5/nlsearch-0.2-9.5.5.zip
 ```
 
 It asks you to accept two entitlements, `outbound_network` and
@@ -124,15 +133,64 @@ if you sent one, and what the model decided: `action` and, depending on it,
 half, since nothing ran. The HTTP status is the one Elasticsearch gave: 201 for
 a new document, 404 for an index that does not exist, and so on.
 
-When the request is not something it can do with Elasticsearch, or something is
-missing ("delete it" without a session), the model answers with
-`"action": "reply"` and a `text` saying what the problem is. Errors come back
-the way Elasticsearch always reports them, with a `reason` written for a
-person: 400 when the plan was refused (a delete on `*`, a write through GET),
-502 when the model is unreachable or produced something unusable, and
-whatever Elasticsearch said when it rejected the call itself.
+`"action": "reply"` means nothing ran, and `text` says why. It happens in three
+cases: the request is not about the data, something needed is genuinely missing
+("delete it" with no session), or two different fields would each answer the
+words and nothing says which is meant. In that last case it asks which you meant,
+because a query against the wrong field does not fail: it returns documents and a
+confident sentence about them. Mood, small talk, swearing and typos are stripped
+and answered, never questioned.
+
+Errors come back the way Elasticsearch always reports them, with a `reason`
+written for a person: 400 when the plan was refused (a delete on `*`, a write
+through GET), 502 when the model is unreachable or produced something unusable,
+and whatever Elasticsearch said when it rejected the call itself.
 
 A `GET /_nl?q=...` can only read. Anything that changes data has to be a POST.
+
+## Knowing what your data means
+
+The hard part is not the query syntax, it is knowing what a field means. A field
+called `dept` holding `FW`, `AP` and `EQ` tells a model nothing, and it will
+guess. Ask for the most expensive piece of clothing and you will get a backpack.
+
+So nlsearch looks at the data first. It pulls a couple of real documents for
+every value of every small keyword field, and works out what the values mean:
+
+```
+POST /_nl/analyze
+```
+
+```json
+{
+  "analysed": 1,
+  "indices": {
+    "inventory": "A list of stock items.\ndept: FW = footwear (shoes, boots, sandals), AP = apparel (clothing, jackets, jeans), EQ = equipment (packs, poles, stoves).\nshoes, footwear, trainers -> dept FW\nclothing, apparel, garments -> dept AP\nout of stock, none left -> qty_on_hand 0\n..."
+  }
+}
+```
+
+From then on "how much equipment do we stock" becomes `{"term": {"dept": "EQ"}}`
+instead of a guess.
+
+It writes down what the codes mean, not what the data contains: an index whose
+values are already plain English gets a one-line briefing saying there was
+nothing to decode, because every keyword value is sent with each request anyway.
+
+You do not have to call it. The first question about an index triggers it, and
+the result is kept in `.nlsearch-analysis`, so only that first question pays.
+It is redone when the mapping changes, or after `nlsearch.analysis_ttl`
+(24 hours by default). An index with nothing in it is skipped, since there is
+nothing to read a meaning from, and analysed once it has documents.
+
+| | |
+|---|---|
+| `POST /_nl/analyze` | look at everything, or one `index`, and store the result |
+| `POST /_nl/analyze?force=true` | redo it even if what is stored is still fresh |
+| `GET /_nl/analyze` | what is stored, without looking again |
+
+Pass a `session` and the briefing is kept for that conversation alone, which is
+how you correct it for one chat without changing what everyone else sees.
 
 ## Conversations
 
@@ -177,18 +235,20 @@ context window has room for.
 
 Being a registered system index means Elasticsearch hides it from every
 wildcard, keeps it out of `_cat/indices`, and refuses writes that do not come
-from the plugin. The model is refused too if it tries to name it. Nothing
-expires on its own, so delete by query on `updated` if you want conversations
-to age out.
+from the plugin. `.nlsearch-analysis` is the same kind of index. Naming either
+of them in a prompt is refused, and the refusal for the analysis one points at
+`POST /_nl/analyze?force=true`, which is the supported way to have it rebuilt.
+Nothing expires on its own, so delete by query on `updated` if you want
+conversations to age out.
 
 Two things to know when wiring up a bot: send the turns of one session one
 after another, because a race can lose a turn, and start a new session when the
 subject changes so the model stops dragging the old one along.
-[The full write-up](https://smsian.github.io/nlsearch/chat-bots) has the rest.
+[The full write-up](https://sheikmohammedsha.github.io/nlsearch/chat-bots) has the rest.
 
 ## Try the API
 
-The `api/` folder holds the same 40 requests as a
+The `api/` folder holds the same 51 requests as a
 [Postman](https://www.postman.com) collection and as a
 [Bruno](https://www.usebruno.com) one:
 
@@ -212,6 +272,7 @@ history.
 | `nlsearch.url`       | provider default   | `http://localhost:11434` for ollama. With `openai` this can be any OpenAI compatible server: Groq, Together, DeepSeek, OpenRouter, LM Studio, vLLM, or Ollama's own `http://localhost:11434/v1` |
 | `nlsearch.api_key`   | empty              | not needed for local servers |
 | `nlsearch.timeout`   | `60s`              | how long to wait for the model |
+| `nlsearch.analysis_ttl` | `24h`           | how long what it worked out about an index stays good for |
 
 All of them can be changed while the cluster is running, no restart:
 
@@ -226,27 +287,31 @@ One request goes through these steps, all in
 [`NLRestHandler`](src/main/java/org/aeruto/nlsearch/NLRestHandler.java):
 
 1. If a `session` was given, the earlier turns are read from the
-   `.nlsearch-history` index (a hidden index, one document per session, last
-   10 turns).
-2. The mappings of all indices and one sample document per index are fetched,
-   so the model knows the real field names and what values look like.
-3. [`Planner`](src/main/java/org/aeruto/nlsearch/Planner.java) sends the rules
+   `.nlsearch-history` index (a system index, one document per session, holding
+   the whole conversation).
+2. What each index means is read from `.nlsearch-analysis`, and worked out first
+   if it is missing or out of date.
+3. The mappings of all indices are fetched, with the values the keyword fields
+   hold and the span of the numbers and dates. An index with no briefing yet
+   also gets a sample document; one with a briefing does not need it.
+4. [`Planner`](src/main/java/org/aeruto/nlsearch/Planner.java) sends the rules
    in [`prompt.txt`](src/main/resources/prompt.txt), the history, the mappings
    and the request to the model, and parses the JSON it answers into a
    [`Plan`](src/main/java/org/aeruto/nlsearch/Plan.java).
-4. [`Actions`](src/main/java/org/aeruto/nlsearch/Actions.java) turns the plan
+5. [`Actions`](src/main/java/org/aeruto/nlsearch/Actions.java) turns the plan
    into the real Elasticsearch request (search, index, bulk, update, delete,
    update_by_query, delete_by_query, create_index, delete_index, get_mapping,
    put_mapping) and runs it through the node client.
-5. The plan and the result go back to you. Unless you asked for `raw`, the
+6. The plan and the result go back to you. Unless you asked for `raw`, the
    result goes to the model once more to be turned into a sentence.
-6. The turn is appended to the session's history together with how it went, so
+7. The turn is appended to the session's history together with how it went, so
    the model can fix itself next time. The answer waits for that write, so a
    bot that fires the next question immediately still sees this turn.
 
 If Elasticsearch rejects the plan (a field that does not exist, a malformed
-query) the model gets one more try with the error in front of it before you
-see a failure. It does not get a second try when the plugin itself refused the
+query) the model gets one more try, with the root cause of the failure stated
+immediately before the request rather than buried above the mappings, before
+you see a failure. It does not get a second try when the plugin itself refused the
 plan, so a refused "delete everything" never turns into a narrower delete.
 
 [`Models`](src/main/java/org/aeruto/nlsearch/Models.java) builds the
@@ -261,6 +326,10 @@ Things worth knowing:
 - The mappings and samples sent to the model are capped at about 12k
   characters: first the samples go, then the field lists. Past that the model
   only sees index names, so name the index in your prompt.
+- Every rule in [`prompt.txt`](src/main/resources/prompt.txt) is written to say
+  how to find an answer, never what the answer is. None of them names a field
+  from any particular dataset, because a rule that does only helps a dataset
+  with that field. That is the whole difference between 0.1 and 0.2.
 - Settings go in `elasticsearch.yml` or in `PUT _cluster/settings`. The API key
   is hidden from `GET _cluster/settings` and `GET _nodes/settings` either way.
 - Requests of one session should be sent one after another; two at the same
@@ -282,13 +351,13 @@ Elasticsearch).
 
 ```
 ./gradlew test        # unit tests
-./gradlew bundle      # build/distributions/nlsearch-0.1-9.5.5.zip
+./gradlew bundle      # build/distributions/nlsearch-0.2-9.5.5.zip
 ```
 
 Try it on a local node:
 
 ```
-bin/elasticsearch-plugin install file:///path/to/nlsearch-0.1-9.5.5.zip
+bin/elasticsearch-plugin install file:///path/to/nlsearch-0.2-9.5.5.zip
 bin/elasticsearch
 ```
 
@@ -298,7 +367,7 @@ To build for another Elasticsearch version: `./gradlew bundle -PesVersion=9.5.4`
 
 A plugin only loads into the exact Elasticsearch version it was built for, so
 every release is named `<plugin version>-<elasticsearch version>`, like
-`0.1-9.5.5`. Pushing a tag `v0.1-9.5.5` makes GitHub Actions build
+`0.2-9.5.5`. Pushing a tag `v0.2-9.5.5` makes GitHub Actions build
 it for that Elasticsearch version and attach the zip to the
 [Releases](../../releases) page, and publishes the jar to
 [GitHub Packages](../../packages) as
@@ -308,7 +377,7 @@ jar beside it.
 To install the plugin you want the zip. The jar holds no dependencies, no
 plugin descriptor and no entitlement policy, so it is there for reading the
 code and building on it, not for `elasticsearch-plugin install`.
-[The step by step](https://smsian.github.io/nlsearch/releasing) is on the site,
+[The step by step](https://sheikmohammedsha.github.io/nlsearch/releasing) is on the site,
 and `docs/` is what that site is built from.
 
 ## License

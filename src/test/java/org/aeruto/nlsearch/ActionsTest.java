@@ -316,6 +316,16 @@ class ActionsTest extends EsLoggingTest {
     }
 
     @Test
+    void theAnalysisIndexIsOffLimitsToo() {
+        Actions.Refused e = assertThrows(Actions.Refused.class,
+            () -> build("{\"action\": \"delete_index\", \"index\": \".nlsearch-analysis\"}"));
+        assertTrue(e.getMessage().contains(".nlsearch-analysis"), e.getMessage());
+        // the refusal says what to do instead, because wanting it rebuilt is a fair thing to want
+        assertTrue(e.getMessage().contains("/_nl/analyze"), e.getMessage());
+        assertThrows(Actions.Refused.class, () -> build("{\"action\": \"search\", \"index\": \".nlsearch-analysis\", \"body\": {}}"));
+    }
+
+    @Test
     void deleteIndex() throws IOException {
         DeleteIndexRequest request = (DeleteIndexRequest) build("{\"action\": \"delete_index\", \"index\": \"products\"}");
         assertArrayEquals(new String[] { "products" }, request.indices());
@@ -367,5 +377,36 @@ class ActionsTest extends EsLoggingTest {
         assertEquals("acknowledged", Actions.summary(AcknowledgedResponse.TRUE));
         IndexResponse created = new IndexResponse(new ShardId("products", "uuid", 0), "1", 0, 1, 1, true);
         assertEquals("document 1 created", Actions.summary(created));
+    }
+
+    @Test
+    void aHitIsNamedWithoutLookingLikeAField() {
+        // "[id 1] Red Running Shoe" once had the model write {"term": {"id": 1}}
+        // against an index with no id field: valid query, zero results, no error
+        assertEquals("Red Running Shoe (document 1)",
+                     Actions.describe("1", Map.of("name", "Red Running Shoe")));
+        assertEquals("Annual Report (document 7)",
+                     Actions.describe("7", Map.of("title", "Annual Report")));
+        assertEquals("document 3", Actions.describe("3", Map.of("sku", "SKU-1")));
+        assertEquals("document 3", Actions.describe("3", null));
+    }
+
+    @Test
+    void theReasonGivenToTheModelCarriesTheCauseNotJustTheWrapper() {
+        Exception root = new IllegalArgumentException("[term] query does not support [gt]");
+        Exception wrapper = new IllegalStateException("[1:87] [bool] failed to parse field [filter]", root);
+        assertEquals("[1:87] [bool] failed to parse field [filter]: [term] query does not support [gt]",
+                     Actions.why(wrapper));
+    }
+
+    @Test
+    void aReasonWithNothingUnderneathIsLeftAlone() {
+        assertEquals("plain", Actions.why(new IllegalArgumentException("plain")));
+    }
+
+    @Test
+    void aRepeatedReasonIsNotSaidTwice() {
+        Exception root = new IllegalArgumentException("same words");
+        assertEquals("same words", Actions.why(new IllegalStateException("same words", root)));
     }
 }

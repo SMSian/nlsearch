@@ -1,0 +1,24 @@
+meta {
+  name: 41 dry run
+  type: http
+  seq: 41
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "delete the products index",
+    "dry_run": true
+  }
+}
+
+docs {
+  Guard rails - dry run
+
+  Returns the plan with dry_run true and no result. Nothing ran.
+}

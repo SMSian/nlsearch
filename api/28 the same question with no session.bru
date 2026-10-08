@@ -1,0 +1,23 @@
+meta {
+  name: 28 the same question with no session
+  type: http
+  seq: 28
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "only the ones in stock"
+  }
+}
+
+docs {
+  Chat bots: sessions and history - the same question with no session
+
+  The same sentence as turn 2, without a session. There is nothing to refer back to, so the model has to guess. This is the difference the session makes.
+}

@@ -30,7 +30,12 @@ final class NLSettings {
 
     static final Setting<TimeValue> TIMEOUT = Setting.timeSetting("nlsearch.timeout", TimeValue.timeValueSeconds(60), Property.NodeScope, Property.Dynamic);
 
-    static final List<Setting<?>> ALL = List.of(PROVIDER, MODEL, URL, API_KEY, TIMEOUT);
+    // how long what we worked out about an index stays good for. A mapping change
+    // invalidates it immediately whatever this says.
+    static final Setting<TimeValue> ANALYSIS_TTL =
+        Setting.timeSetting("nlsearch.analysis_ttl", TimeValue.timeValueHours(24), Property.NodeScope, Property.Dynamic);
+
+    static final List<Setting<?>> ALL = List.of(PROVIDER, MODEL, URL, API_KEY, TIMEOUT, ANALYSIS_TTL);
 
     private NLSettings() {}
 }

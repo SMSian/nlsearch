@@ -2,6 +2,8 @@
 title: Installing
 ---
 
+[Start](./) · **Installing** · [Chat bots](chat-bots) · [Releasing](releasing) · [Troubleshooting](troubleshooting)
+
 You need three things: Elasticsearch 9.5.5, the plugin zip for that exact
 version, and a model to talk to.
 
@@ -26,7 +28,7 @@ xpack.security.enabled: false
 ## 2. The plugin
 
 ```bash
-bin/elasticsearch-plugin install https://github.com/SMSian/nlsearch/releases/download/v0.1-9.5.5/nlsearch-0.1-9.5.5.zip
+bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.2-9.5.5/nlsearch-0.2-9.5.5.zip
 ```
 
 It asks you to accept two entitlements (`outbound_network` and
@@ -55,6 +57,7 @@ nlsearch.model: gpt-4o-mini
 nlsearch.api_key: sk-...
 # nlsearch.url: https://api.groq.com/openai/v1   # any OpenAI compatible server, with provider openai
 # nlsearch.timeout: 60s
+# nlsearch.analysis_ttl: 24h          # how long what it worked out about an index stays good for
 ```
 
 Or without a restart:
@@ -75,7 +78,8 @@ curl -XPOST localhost:9200/_nl -H 'Content-Type: application/json' -d '{"prompt"
 start, the log (`logs/<cluster name>.log`) says why; the usual reason is a
 version mismatch.
 
-
 ---
 
-[Back to the start](./)
+[Start](./) · **Installing** · [Chat bots](chat-bots) · [Releasing](releasing) · [Troubleshooting](troubleshooting)
+
+[Repository](https://github.com/sheikmohammedsha/nlsearch) · [Releases](https://github.com/sheikmohammedsha/nlsearch/releases) · [Wiki](https://github.com/sheikmohammedsha/nlsearch/wiki) · [Report a problem](https://github.com/sheikmohammedsha/nlsearch/issues)

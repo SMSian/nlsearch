@@ -10,6 +10,7 @@ import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.plugins.SystemIndexPlugin;
 import org.elasticsearch.rest.RestHandler;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.Predicate;
@@ -19,10 +20,14 @@ import java.util.function.Supplier;
 public class NLSearchPlugin extends Plugin implements ActionPlugin, SystemIndexPlugin {
 
     private final Models models;
+    private final List<NLRestHandler> handlers = new ArrayList<>();
 
     public NLSearchPlugin(Settings settings) {
         models = new Models(settings);
+        this.settings = settings;
     }
+
+    private volatile Settings settings;
 
     /**
      * The chat history lives in a system index. Registering it is what lets the
@@ -35,6 +40,12 @@ public class NLSearchPlugin extends Plugin implements ActionPlugin, SystemIndexP
             SystemIndexDescriptor.builder()
                 .setIndexPattern(History.PATTERN)
                 .setDescription("Conversations held with the nlsearch _nl endpoint")
+                .setType(SystemIndexDescriptor.Type.INTERNAL_UNMANAGED)
+                .setOrigin(History.ORIGIN)
+                .build(),
+            SystemIndexDescriptor.builder()
+                .setIndexPattern(Analysis.PATTERN)
+                .setDescription("What nlsearch worked out about each index")
                 .setType(SystemIndexDescriptor.Type.INTERNAL_UNMANAGED)
                 .setOrigin(History.ORIGIN)
                 .build()
@@ -59,7 +70,10 @@ public class NLSearchPlugin extends Plugin implements ActionPlugin, SystemIndexP
     @Override
     public Collection<?> createComponents(PluginServices services) {
         // so PUT _cluster/settings can switch model or provider without a restart
-        services.clusterService().getClusterSettings().addSettingsUpdateConsumer(models::reload, NLSettings.ALL);
+        services.clusterService().getClusterSettings().addSettingsUpdateConsumer(changed -> {
+            models.reload(changed);
+            handlers.forEach(handler -> handler.reload(changed));
+        }, NLSettings.ALL);
         return List.of();
     }
 
@@ -69,6 +83,8 @@ public class NLSearchPlugin extends Plugin implements ActionPlugin, SystemIndexP
         Supplier<DiscoveryNodes> nodesInCluster,
         Predicate<NodeFeature> clusterSupportsFeature
     ) {
-        return List.of(new NLRestHandler(models, clusterSupportsFeature));
+        NLRestHandler handler = new NLRestHandler(models, settings, clusterSupportsFeature);
+        handlers.add(handler);
+        return List.of(handler);
     }
 }

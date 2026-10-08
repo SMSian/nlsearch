@@ -1,0 +1,23 @@
+meta {
+  name: 15 plain search
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "red shoes under 50"
+  }
+}
+
+docs {
+  Searching - plain search
+
+  A full text match on the name and a range filter on the price, in one bool query.
+}

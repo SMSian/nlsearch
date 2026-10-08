@@ -15,6 +15,8 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +29,9 @@ class Planner {
     // how to turn what Elasticsearch answered back into a sentence
     static final String EXPLAIN = read("explain.txt");
 
+    // how to work out what an index actually means
+    static final String ANALYZE = read("analyze.txt");
+
     // enough of the response for the model to describe it, without filling the window
     static final int MAX_RESULT_CHARS = 6000;
 
@@ -37,10 +42,10 @@ class Planner {
     }
 
     Plan plan(String request, List<History.Turn> history, Map<String, Object> mappings, Map<String, Object> facts,
-              Map<String, Object> samples) {
+              Map<String, Object> samples, Map<String, String> briefings) {
         String answer;
         try {
-            answer = models.get().chat(messages(request, history, mappings, facts, samples)).aiMessage().text();
+            answer = models.get().chat(messages(request, history, mappings, facts, samples, briefings)).aiMessage().text();
         } catch (Exception e) {
             throw new ElasticsearchStatusException("could not get an answer from " + models.name() + ": " + e.getMessage(), RestStatus.BAD_GATEWAY, e);
         }
@@ -49,26 +54,72 @@ class Planner {
 
     // rules, then the earlier turns and how they went, then the request with what the cluster looks like
     static List<ChatMessage> messages(String request, List<History.Turn> history, Map<String, Object> mappings,
-                                      Map<String, Object> facts, Map<String, Object> samples) {
+                                      Map<String, Object> facts, Map<String, Object> samples, Map<String, String> briefings) {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(INSTRUCTIONS));
         String happened = "";
+        String lastOutcome = "";
         for (History.Turn turn : History.recent(history)) {
             messages.add(UserMessage.from(happened + turn.prompt()));
             messages.add(AiMessage.from(turn.answer()));
             happened = "(what happened with that: " + turn.outcome() + ")\n\n";
+            lastOutcome = turn.outcome();
         }
-        messages.add(UserMessage.from(happened + context(request, mappings, facts, samples)));
+        messages.add(UserMessage.from(context(request, mappings, facts, samples, briefings, lastOutcome, staying(history))));
         return messages;
     }
 
     /**
+     * The index the conversation is already about.
+     *
+     * Saying this out loud is only necessary because of the briefings. One of them
+     * will state plainly that "out of stock" means qty_on_hand 0 in some warehouse
+     * index, and those words then pull a follow-up away from the index the user was
+     * actually looking at. The rule is in prompt.txt as well, but a rule two hundred
+     * lines up competes badly with a briefing; the name of the index, given here,
+     * does not have to compete with anything.
+     */
+    static String staying(List<History.Turn> history) {
+        for (int i = history.size() - 1; i >= 0; i--) {
+            try {
+                String index = Plan.parse(history.get(i).answer()).index();
+                if (index != null && index.isBlank() == false) {
+                    return index;
+                }
+            } catch (Exception e) {
+                // an answer we can no longer read tells us nothing; look further back
+            }
+        }
+        return null;
+    }
+
+    /**
      * What the model is told about the cluster before the request. The two things
-     * it gets wrong most often, the keyword values and the dates, go last, right
-     * before the request, because that is what it pays most attention to.
+     * it gets wrong most often, the keyword values and the dates, go late, close to
+     * the request, because that is what it pays most attention to. The request itself
+     * stays last of all, with the two things that have to beat everything above
+     * them immediately before it: which index the conversation is about, and how
+     * the last answer went.
      */
     static String context(String request, Map<String, Object> mappings, Map<String, Object> facts, Map<String, Object> samples) {
+        return context(request, mappings, facts, samples, Map.of());
+    }
+
+    static String context(String request, Map<String, Object> mappings, Map<String, Object> facts,
+                          Map<String, Object> samples, Map<String, String> briefings) {
+        return context(request, mappings, facts, samples, briefings, "", null);
+    }
+
+    static String context(String request, Map<String, Object> mappings, Map<String, Object> facts,
+                          Map<String, Object> samples, Map<String, String> briefings,
+                          String lastOutcome, String staying) {
         StringBuilder text = new StringBuilder();
+        if (briefings.isEmpty() == false) {
+            // the most valuable thing here: what the fields and the coded values actually mean
+            text.append("What these indices hold, worked out from the data itself. Trust this over your own reading of a field name:\n");
+            briefings.forEach((index, briefing) -> text.append("\n").append(index).append("\n").append(briefing).append("\n"));
+            text.append("\n");
+        }
         text.append("Indices and their mappings:\n").append(json(mappings)).append("\n\n");
         if (samples.isEmpty() == false) {
             text.append("One real document from each index, so you can see what the values look like:\n").append(json(samples)).append("\n\n");
@@ -80,8 +131,37 @@ class Planner {
                 .append("The spans tell you what the data really covers, so do not filter on a range that falls outside them.\n\n");
         }
         text.append(dates()).append("\n");
+        if (staying != null) {
+            text.append("This conversation is about the index \"").append(staying)
+                .append("\". Unless the request below names a different index, answer about that one. ")
+                .append("That settles the index and nothing else: what to do comes from the request itself.\n\n");
+        }
+        if (lastOutcome != null && lastOutcome.isEmpty() == false) {
+            text.append(followUp(lastOutcome)).append("\n\n");
+        }
         text.append("Request: ").append(request);
         return text.toString();
+    }
+
+    /**
+     * How the previous answer went, said immediately before the request.
+     *
+     * This used to be the first line of this message, which is a long way from the
+     * request once the briefings, the mappings and the facts sit in between. A retry
+     * read straight past it and sent the identical broken query a second time, which
+     * is a wasted model call and a 400 for the user either way.
+     *
+     * It does not go after the request either. That was tried, and the model started
+     * treating the outcome as the thing to respond to: told "document 1 deleted" last,
+     * it answered "delete the products index" by deleting document 1 again. Whatever
+     * comes last is what gets answered, so the request comes last.
+     */
+    private static String followUp(String outcome) {
+        if (outcome.startsWith("failed:")) {
+            return "Your own previous answer, just above, " + outcome
+                + "\nFix whatever caused that. Do not send the same JSON again.";
+        }
+        return "(what happened with your previous answer: " + outcome + ")";
     }
 
     /** Date ranges worked out in advance, because small models do calendar arithmetic badly. */
@@ -99,6 +179,67 @@ class Planner {
         text.append("  the last 30 days ").append(today.minusDays(30)).append(" to ").append(today).append("\n");
         text.append("  a month named on its own, like \"March\", means that month of ").append(today.getYear()).append("\n");
         return text.toString();
+    }
+
+    /**
+     * Works out what these indices are for and what their fields and coded values
+     * mean, all in one call. Done once and stored, because it is the expensive
+     * part and it only changes when the data does. Taking the whole cluster at
+     * once costs one request instead of one per index, and lets the answer say
+     * how the indices relate.
+     */
+    Map<String, String> analyse(Map<String, Object> mappings, Map<String, Object> facts,
+                                Map<String, List<Map<String, Object>>> examples) {
+        StringBuilder about = new StringBuilder();
+        for (Map.Entry<String, Object> index : mappings.entrySet()) {
+            String name = index.getKey();
+            about.append("### ").append(name).append("\n")
+                 .append("Mapping: ").append(json(asMap(index.getValue()))).append("\n")
+                 .append("What is in it: ").append(json(asMap(facts.get(name)))).append("\n")
+                 .append("Documents, chosen to cover each keyword value: ")
+                 .append(json(Map.of("documents", examples.getOrDefault(name, List.of())))).append("\n\n");
+        }
+        about.append("Now write one briefing per index, each starting with its ## line.");
+        String answer;
+        try {
+            answer = models.study(mappings.size())
+                .chat(SystemMessage.from(ANALYZE), UserMessage.from(about.toString())).aiMessage().text();
+        } catch (Exception e) {
+            // without this it surfaces as a 500 and a langchain4j stack trace, which tells nobody what to do
+            throw new ElasticsearchStatusException("could not work out what the indices hold, asking " + models.name()
+                + ": " + e.getMessage() + "; analysing one index at a time ({\"index\": \"...\"}) asks less of it,"
+                + " and nlsearch.timeout is what bounds each one", RestStatus.BAD_GATEWAY, e);
+        }
+        return split(answer, mappings.keySet());
+    }
+
+    /** Cuts the one answer back into a briefing per index, on its "## name" lines. */
+    static Map<String, String> split(String answer, Collection<String> indices) {
+        Map<String, String> briefings = new LinkedHashMap<>();
+        String current = null;
+        StringBuilder text = new StringBuilder();
+        for (String line : answer.split("\n", -1)) {
+            String heading = line.strip().replaceFirst("^#+\\s*", "");
+            if (line.strip().startsWith("#") && indices.contains(heading)) {
+                if (current != null) {
+                    briefings.put(current, text.toString().strip());
+                }
+                current = heading;
+                text.setLength(0);
+            } else if (current != null) {
+                text.append(line).append("\n");
+            }
+        }
+        if (current != null) {
+            briefings.put(current, text.toString().strip());
+        }
+        briefings.values().removeIf(String::isEmpty);
+        return briefings;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Object value) {
+        return value instanceof Map ? (Map<String, Object>) value : Map.of();
     }
 
     /** Turns what Elasticsearch answered into a sentence for the person who asked. */

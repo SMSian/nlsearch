@@ -1,0 +1,23 @@
+meta {
+  name: 22 the single best
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{host}}/_nl
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "prompt": "whats the most expensive thing we sell"
+  }
+}
+
+docs {
+  Ordering - the single best
+
+  A superlative becomes a sort with size 1. It uses price because that is a field this collection actually creates; ask for the best rated and you get an honest error, since nothing here has a rating.
+}

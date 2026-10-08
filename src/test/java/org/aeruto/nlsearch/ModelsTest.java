@@ -69,4 +69,14 @@ class ModelsTest {
         assertEquals(60_000, NLSettings.TIMEOUT.get(Settings.EMPTY).millis());
         assertEquals(5_000, NLSettings.TIMEOUT.get(settings("nlsearch.timeout", "5s")).millis());
     }
+
+    @Test
+    void theStudyModelGetsTheTimeoutOncePerIndex() {
+        Settings settings = Settings.builder().put("nlsearch.timeout", "30s").build();
+        // one index asks for one timeout's worth, four ask for four
+        assertEquals(java.time.Duration.ofSeconds(30), Models.timeout(settings, 1));
+        assertEquals(java.time.Duration.ofSeconds(120), Models.timeout(settings, 4));
+        // an empty cluster still gets a sane budget rather than none
+        assertEquals(java.time.Duration.ofSeconds(30), Models.timeout(settings, 0));
+    }
 }
