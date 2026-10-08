@@ -56,7 +56,7 @@ With [Ollama](https://ollama.com) running and Elasticsearch 9.5.5 installed:
 
 ```bash
 ollama pull qwen2.5-coder:7b
-bin/elasticsearch-plugin install --batch https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.3-9.5.5/nlsearch-0.3-9.5.5.zip
+bin/elasticsearch-plugin install --batch https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.31-9.5.5/nlsearch-0.31-9.5.5.zip
 bin/elasticsearch
 ```
 
@@ -91,8 +91,9 @@ refused the plan, there is no second try, so a refused "delete everything" never
 turns into a narrower delete.
 
 Two things Elasticsearch would not complain about are caught anyway. A query
-naming a field the index does not have is refused before it runs, because such a
-query matches nothing and the empty result reads as an answer. And a search that
+on one named index that uses a field the index does not have is stopped before it
+runs and handed back to the model with the real field names, because such a query
+matches nothing and the empty result reads as an answer. And a search that
 found nothing, where a word it looked for in a text field is a value of some
 keyword field, gets one more try with that pointed out.
 

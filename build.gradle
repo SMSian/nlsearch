@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'org.aeruto'
-version = findProperty('pluginVersion') ?: '0.3'
+version = findProperty('pluginVersion') ?: '0.31'
 
 // A plugin only loads into the exact Elasticsearch version it was built for,
 // so there is one release per ES version, named <plugin version>-<es version>.
@@ -72,7 +72,7 @@ tasks.register('bundle', Zip) {
 //   GITHUB_ACTOR=<you> GITHUB_TOKEN=<token> ./gradlew publish
 //
 // The version is the same <plugin>-<elasticsearch> as the release, so one
-// coordinate pins both: org.aeruto:nlsearch:0.3-9.5.5
+// coordinate pins both: org.aeruto:nlsearch:0.31-9.5.5
 publishing {
     publications {
         maven(MavenPublication) {

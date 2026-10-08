@@ -369,15 +369,14 @@ public class NLRestHandler extends BaseRestHandler {
                 if (readOnly && Actions.READ_ONLY.contains(plan.action()) == false) {
                     throw new Actions.Refused("a GET can only read; use POST to change data");
                 }
-                unknownFields(plan);
-                ActionRequest request = Actions.toRequest(plan, parserConfig, clusterSupportsFeature);
+                ActionRequest request = prepare(plan, mappings, parserConfig, clusterSupportsFeature);
                 if (dryRun) {
                     finish(plan, null, RestStatus.OK, "dry run, nothing was executed");
                     return;
                 }
                 Actions.run(client, request, ActionListener.wrap(
                     response -> {
-                        String hint = tries < 2 && Actions.hits(response) == 0 ? searchedTheWrongField(plan) : null;
+                        String hint = tries < 2 && Actions.hits(response) == 0 ? searchedTheWrongField(plan, facts) : null;
                         if (hint != null) {
                             history.add(new History.Turn(prompt, Planner.json(plan.toMap()), "found nothing. " + hint));
                             offTheNetworkThread(client, channel, () -> attempt(tries + 1));
@@ -389,94 +388,6 @@ public class NLRestHandler extends BaseRestHandler {
                 ));
             } catch (Exception e) {
                 rejected(plan, e, tries);
-            }
-        }
-
-        /**
-         * Why a search that found nothing probably found nothing.
-         *
-         * The commonest wrong query in this whole plugin searches a text field for a word
-         * that is a value of a keyword field: "shoes" against name, when shoes is a
-         * category. It is valid, it matches nothing, and an empty result reads as an
-         * answer. The rules say not to, the values are in the prompt, and a 7B model does
-         * it anyway.
-         *
-         * So this is checked after the fact rather than before: no documents came back,
-         * and a word being searched for is exactly a value of some keyword field that the
-         * query never filtered on. Only then, and only once. Nothing is refused and no
-         * correct query is ever blocked, because by this point we know the answer was
-         * empty either way.
-         */
-        @SuppressWarnings("unchecked")
-        String searchedTheWrongField(Plan plan) {
-            if (facts.get(plan.index()) instanceof Map<?, ?> about
-                && about.get("values") instanceof Map<?, ?> values) {
-                Map<String, String> looking = Actions.matched(plan.body());
-                for (Map.Entry<String, String> each : looking.entrySet()) {
-                    for (String word : each.getValue().toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
-                        for (Map.Entry<?, ?> field : values.entrySet()) {
-                            String name = String.valueOf(field.getKey());
-                            // whether the right filter is also present does not matter: the text
-                            // search is impossible either way, and it is what returned nothing
-                            if (name.equals(each.getKey()) || word.isEmpty()) {
-                                continue;
-                            }
-                            if (field.getValue() instanceof List<?> held && held.stream()
-                                    .anyMatch(value -> String.valueOf(value).toLowerCase(Locale.ROOT).equals(word))) {
-                                return "\"" + word + "\" is a value of the keyword field [" + name + "], not a word in ["
-                                    + each.getKey() + "]. Replace that text search with a term filter on [" + name + "]."
-                                    + " Adding the filter and keeping the text search leaves the same impossible condition in place,"
-                                    + " so take the text search out unless what is left of it is really part of a name.";
-                            }
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        /**
-         * Stop a plan that filters, sorts or aggregates on a field the index does not have.
-         *
-         * Elasticsearch runs such a query happily and returns nothing, which is the one
-         * failure nobody notices: no error, a tidy empty result, and an explanation that
-         * confidently says there were none. Caught here it becomes an ordinary rejection,
-         * so the model gets one more go with the real field names in front of it.
-         *
-         * Only for reads of one existing index. A write may legitimately introduce a field,
-         * and a plan with no index or a wildcard has no single mapping to check against.
-         */
-        void unknownFields(Plan plan) {
-            if (CHECKED.contains(plan.action()) == false || plan.index() == null) {
-                return;
-            }
-            Object mapping = mappings.get(plan.index());
-            if (mapping == null) {
-                // a category or a brand used as an index name. Elasticsearch answers 404,
-                // which reaches the user as a stack-shaped error about an index they never
-                // mentioned, so say what the indices actually are instead
-                throw new IllegalArgumentException("there is no index called [" + plan.index()
-                    + "]. The indices are: " + String.join(", ", mappings.keySet())
-                    + ". A category, a brand or any other field value is never an index name.");
-            }
-            String contradiction = Actions.contradiction(plan.body());
-            if (contradiction != null) {
-                throw new IllegalArgumentException("the query both requires and excludes [" + contradiction
-                    + "], so nothing can ever match it. Asking for everything except something is one condition,"
-                    + " a must_not, not a must and a must_not together.");
-            }
-            Set<String> known = Indices.fields(mapping);
-            if (known.isEmpty()) {
-                return;
-            }
-            List<String> missing = Actions.fieldsUsed(plan.body()).stream()
-                .filter(field -> field.startsWith("_") == false)
-                .filter(field -> known.contains(field) == false)
-                .toList();
-            if (missing.isEmpty() == false) {
-                throw new IllegalArgumentException("[" + plan.index() + "] has no field "
-                    + String.join(" or ", missing) + ". Its fields are: " + String.join(", ", known)
-                    + ". Use one of those, or reply and say the data does not hold what was asked for.");
             }
         }
 
@@ -572,6 +483,114 @@ public class NLRestHandler extends BaseRestHandler {
         void fail(Exception e) {
             send(channel, e);
         }
+    }
+
+    /**
+     * The plan as an Elasticsearch request: the guards in {@link Actions#toRequest} first,
+     * then the checks against the mapping.
+     *
+     * The order is the difference between no and try again. A guard's refusal is final and
+     * a failed check is retried, so a check that runs first can turn a refusal into a retry.
+     * It did: a delete over every index failed as "there is no index called [*]", and the
+     * second attempt was free to come back as a delete on one named index, which then ran.
+     */
+    static ActionRequest prepare(Plan plan, Map<String, Object> mappings, XContentParserConfiguration parserConfig,
+                                 Predicate<NodeFeature> clusterSupportsFeature) throws IOException {
+        ActionRequest request = Actions.toRequest(plan, parserConfig, clusterSupportsFeature);
+        unknownFields(plan, mappings);
+        return request;
+    }
+
+    /**
+     * Stop a plan that filters, sorts or aggregates on a field the index does not have.
+     *
+     * Elasticsearch runs such a query happily and returns nothing, which is the one
+     * failure nobody notices: no error, a tidy empty result, and an explanation that
+     * confidently says there were none. Caught here it becomes an ordinary rejection,
+     * so the model gets one more go with the real field names in front of it.
+     *
+     * Only for reads of one named index. A write may legitimately introduce a field, and
+     * a plan with no index, a wildcard or a list has no single mapping to check against:
+     * a search over every index is exactly what "*" is for.
+     */
+    static void unknownFields(Plan plan, Map<String, Object> mappings) {
+        if (CHECKED.contains(plan.action()) == false || plan.index() == null || Actions.several(plan.index())) {
+            return;
+        }
+        Object mapping = mappings.get(plan.index());
+        if (mapping == null) {
+            // a category or a brand used as an index name. Elasticsearch answers 404,
+            // which reaches the user as a stack-shaped error about an index they never
+            // mentioned, so say what the indices actually are instead
+            throw new IllegalArgumentException("there is no index called [" + plan.index()
+                + "]. The indices are: " + String.join(", ", mappings.keySet())
+                + ". A category, a brand or any other field value is never an index name.");
+        }
+        String contradiction = Actions.contradiction(plan.body());
+        if (contradiction != null) {
+            throw new IllegalArgumentException("the query both requires and excludes [" + contradiction
+                + "], so nothing can ever match it. Asking for everything except something is one condition,"
+                + " a must_not, not a must and a must_not together.");
+        }
+        Set<String> known = Indices.fields(mapping);
+        if (known.isEmpty()) {
+            return;
+        }
+        List<String> missing = Actions.fieldsUsed(plan.body()).stream()
+            .filter(field -> field.startsWith("_") == false)
+            .filter(field -> known.contains(field) == false)
+            .toList();
+        if (missing.isEmpty() == false) {
+            throw new IllegalArgumentException("[" + plan.index() + "] has no field "
+                + String.join(" or ", missing) + ". Its fields are: " + String.join(", ", known)
+                + ". Use one of those, or reply and say the data does not hold what was asked for.");
+        }
+    }
+
+    /**
+     * Why a search that found nothing probably found nothing.
+     *
+     * The commonest wrong query in this whole plugin searches a text field for a word
+     * that is a value of a keyword field: "shoes" against name, when shoes is a
+     * category. It is valid, it matches nothing, and an empty result reads as an
+     * answer. The rules say not to, the values are in the prompt, and a 7B model does
+     * it anyway.
+     *
+     * So this is checked after the fact rather than before: no documents came back,
+     * and a word being searched for is exactly a value of some keyword field that the
+     * query never filtered on. Only then, and only once. Nothing is refused and no
+     * correct query is ever blocked, because by this point we know the answer was
+     * empty either way.
+     */
+    @SuppressWarnings("unchecked")
+    static String searchedTheWrongField(Plan plan, Map<String, Object> facts) {
+        // no index means every index, and there is nothing to look up for it. The facts
+        // can be an empty Map.of() (trimmed, or nothing worth summarising), and that
+        // throws on get(null)
+        if (plan.index() != null && facts.get(plan.index()) instanceof Map<?, ?> about
+            && about.get("values") instanceof Map<?, ?> values) {
+            Map<String, String> looking = Actions.matched(plan.body());
+            for (Map.Entry<String, String> each : looking.entrySet()) {
+                for (String word : each.getValue().toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
+                    for (Map.Entry<?, ?> field : values.entrySet()) {
+                        String name = String.valueOf(field.getKey());
+                        // whether the right filter is also present does not matter: the text
+                        // search is impossible either way, and it is what returned nothing
+                        if (name.equals(each.getKey()) || word.isEmpty()) {
+                            continue;
+                        }
+                        if (field.getValue() instanceof List<?> held && held.stream()
+                                .anyMatch(value -> String.valueOf(value).toLowerCase(Locale.ROOT).equals(word))) {
+                            return "\"" + word + "\" is a value of the keyword field [" + name + "], not a word in ["
+                                + each.getKey() + "]. Replace that text search with a term filter on [" + name + "]."
+                                + " Adding the filter and keeping the text search leaves the same impossible condition in place,"
+                                + " so take the text search out unless what is left of it is really part of a name.";
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     // the model takes seconds and the lookups block, neither belongs on a network thread

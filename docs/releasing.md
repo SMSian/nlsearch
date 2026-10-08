@@ -19,15 +19,15 @@ so people can read it without cloning anything.
 A plugin only loads into the exact Elasticsearch version it was compiled
 against. So every release is named
 
-    <plugin version>-<elasticsearch version>      e.g.  0.3-9.5.5
+    <plugin version>-<elasticsearch version>      e.g.  0.31-9.5.5
 
 and the tag that produces it is the same with a `v` in front:
 
-    v0.3-9.5.5
+    v0.31-9.5.5
 
-The zip that ends up on the Releases page is `nlsearch-0.3-9.5.5.zip`.
+The zip that ends up on the Releases page is `nlsearch-0.31-9.5.5.zip`.
 When Elasticsearch 9.5.6 comes out you do not change any code, you push a tag
-`v0.3-9.5.6` and a new release appears, built against 9.5.6.
+`v0.31-9.5.6` and a new release appears, built against 9.5.6.
 
 ## 2. The GitHub Actions build (CI)
 
@@ -68,9 +68,9 @@ to try it. Actions tab -> pick the run -> the artifact is at the bottom of the
 run page, named after the commit, holding:
 
 ```
-nlsearch-0.3-9.5.5.zip        install this with elasticsearch-plugin
-nlsearch-0.3.jar              the plugin classes
-nlsearch-0.3-sources.jar      the source, for an IDE
+nlsearch-0.31-9.5.5.zip        install this with elasticsearch-plugin
+nlsearch-0.31.jar              the plugin classes
+nlsearch-0.31-sources.jar      the source, for an IDE
 ```
 
 The version is the one in `build.gradle` whichever branch it came from, the
@@ -82,27 +82,27 @@ the same thing from different commits. They are kept for 90 days.
 From your machine, on the `main` branch, with everything committed:
 
 ```bash
-git tag v0.3-9.5.5
-git push origin v0.3-9.5.5
+git tag v0.31-9.5.5
+git push origin v0.31-9.5.5
 ```
 
 That is all. Within a few minutes the Releases page
-(https://github.com/sheikmohammedsha/nlsearch/releases) shows "nlsearch 0.3 for
-Elasticsearch 9.5.5" with `nlsearch-0.3-9.5.5.zip` attached and release
+(https://github.com/sheikmohammedsha/nlsearch/releases) shows "nlsearch 0.31 for
+Elasticsearch 9.5.5" with `nlsearch-0.31-9.5.5.zip` attached and release
 notes generated from the commits. Tags containing `alpha`, `beta` or `rc` are
 marked as pre-releases automatically.
 
 Anyone can then install the plugin straight from that URL:
 
 ```bash
-bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.3-9.5.5/nlsearch-0.3-9.5.5.zip
+bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.31-9.5.5/nlsearch-0.31-9.5.5.zip
 ```
 
 ### Releasing for another Elasticsearch version
 
 ```bash
-git tag v0.3-9.5.6
-git push origin v0.3-9.5.6
+git tag v0.31-9.5.6
+git push origin v0.31-9.5.6
 ```
 
 The workflow takes the last part of the tag as the Elasticsearch version and
@@ -111,24 +111,24 @@ against the plugin, the release fails and the Actions log tells you why.
 
 ### Bumping the plugin version
 
-The default plugin version is in `build.gradle` (`version = ... '0.3'`).
-The release workflow overrides it from the tag (`-PpluginVersion=0.3`),
-so a tag `v0.3-9.5.5` releases as 0.3 without editing anything. Update the
+The default plugin version is in `build.gradle` (`version = ... '0.31'`).
+The release workflow overrides it from the tag (`-PpluginVersion=0.31`),
+so a tag `v0.31-9.5.5` releases as 0.31 without editing anything. Update the
 default in `build.gradle` too when you move on, so local builds match.
 
 ### If you would rather do it by hand
 
 Build locally (`./gradlew bundle`), then on GitHub: Releases -> **Draft a new
-release** -> choose or create the tag `v0.3-9.5.5` -> title
-"nlsearch 0.3 for Elasticsearch 9.5.5" -> drag
-`build/distributions/nlsearch-0.3-9.5.5.zip` into the assets box -> tick
+release** -> choose or create the tag `v0.31-9.5.5` -> title
+"nlsearch 0.31 for Elasticsearch 9.5.5" -> drag
+`build/distributions/nlsearch-0.31-9.5.5.zip` into the assets box -> tick
 "pre-release" -> Publish. A ready-built copy of that zip is next to this file in
 your Downloads folder.
 
 ### Deleting a bad release
 
 Releases page -> the release -> Delete. Then delete the tag:
-`git push origin :refs/tags/v0.3-9.5.5` and `git tag -d v0.3-9.5.5`.
+`git push origin :refs/tags/v0.31-9.5.5` and `git tag -d v0.31-9.5.5`.
 Push the tag again after fixing things.
 
 ## 4. The wiki
@@ -220,10 +220,10 @@ What goes up, under `org.aeruto:nlsearch:<plugin>-<elasticsearch>`:
 
 | file | what it is |
 |---|---|
-| `nlsearch-0.3-9.5.5.jar` | the plugin classes on their own |
-| `nlsearch-0.3-9.5.5-sources.jar` | the source, so an IDE can step into it |
-| `nlsearch-0.3-9.5.5-plugin.zip` | the installable bundle, the same one as on the Releases page |
-| `nlsearch-0.3-9.5.5.pom` | the dependencies |
+| `nlsearch-0.31-9.5.5.jar` | the plugin classes on their own |
+| `nlsearch-0.31-9.5.5-sources.jar` | the source, so an IDE can step into it |
+| `nlsearch-0.31-9.5.5-plugin.zip` | the installable bundle, the same one as on the Releases page |
+| `nlsearch-0.31-9.5.5.pom` | the dependencies |
 
 **To install the plugin you still want the zip**, either from the Releases page
 or the `-plugin.zip` above. The bare jar is not installable on its own: it holds
@@ -244,7 +244,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'org.aeruto:nlsearch:0.3-9.5.5'
+    compileOnly 'org.aeruto:nlsearch:0.31-9.5.5'
 }
 ```
 
@@ -259,7 +259,7 @@ or Maven:
 <dependency>
   <groupId>org.aeruto</groupId>
   <artifactId>nlsearch</artifactId>
-  <version>0.3-9.5.5</version>
+  <version>0.31-9.5.5</version>
 </dependency>
 ```
 
@@ -290,7 +290,7 @@ In order:
    Bruno collection and the two workflows. Nothing else; local Elasticsearch,
    Ollama, build output and IDE files are ignored by `.gitignore`.
 2. **CI green**: the `build` workflow passes on `main` (Actions tab).
-3. **Release**: push the tag `v0.3-9.5.5`; check the Releases page shows
+3. **Release**: push the tag `v0.31-9.5.5`; check the Releases page shows
    the zip.
 4. **README points at it**: the install command in the README uses the release
    URL, so it works the moment the release exists.
@@ -312,7 +312,7 @@ has the three commands.
 git clone git@github.com:sheikmohammedsha/nlsearch.git
 cd nlsearch
 ./gradlew test            # unit tests
-./gradlew bundle          # build/distributions/nlsearch-0.3-9.5.5.zip
+./gradlew bundle          # build/distributions/nlsearch-0.31-9.5.5.zip
 ./gradlew bundle -PesVersion=9.5.4   # for another Elasticsearch version
 ```
 

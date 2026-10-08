@@ -21,6 +21,7 @@ import org.elasticsearch.action.support.master.AcknowledgedResponse;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.internal.node.NodeClient;
 import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.common.xcontent.ChunkedToXContent;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.core.TimeValue;
@@ -75,12 +76,16 @@ final class Actions {
     @SuppressWarnings("unchecked")
     static ActionRequest toRequest(Plan plan, XContentParserConfiguration parserConfig, Predicate<NodeFeature> clusterSupportsFeature)
         throws IOException {
-        if (History.INDEX.equals(plan.index())) {
-            throw new Refused("[" + History.INDEX + "] is where nlsearch keeps the chat history, leave it alone");
-        }
-        if (Analysis.INDEX.equals(plan.index())) {
-            throw new Refused("[" + Analysis.INDEX + "] is where nlsearch keeps what it worked out about your data,"
-                + " leave it alone; POST /_nl/analyze?force=true rebuilds it");
+        // our own indices are off limits however they are named: alone, inside a list, or
+        // behind a pattern; a pattern that starts with a dot reaches hidden dot indices
+        for (String name : plan.index() == null ? new String[0] : Strings.splitStringByCommaToArray(plan.index())) {
+            if (reaches(name.trim(), History.INDEX)) {
+                throw new Refused("[" + History.INDEX + "] is where nlsearch keeps the chat history, leave it alone");
+            }
+            if (reaches(name.trim(), Analysis.INDEX)) {
+                throw new Refused("[" + Analysis.INDEX + "] is where nlsearch keeps what it worked out about your data,"
+                    + " leave it alone; POST /_nl/analyze?force=true rebuilds it");
+            }
         }
         switch (plan.action()) {
             case "search": {
@@ -509,10 +514,20 @@ final class Actions {
     // anything that changes an index runs against one named index, never a pattern
     private static String oneIndex(Plan plan) {
         String index = index(plan);
-        if (index.contains("*") || index.contains(",") || index.equals("_all")) {
+        if (several(index)) {
             throw new Refused("[" + plan.action() + "] needs one index name, not [" + index + "]");
         }
         return index;
+    }
+
+    /** A wildcard, a comma list or _all: a name that can stand for more than one index. */
+    static boolean several(String index) {
+        return index.contains("*") || index.contains(",") || index.equals("_all");
+    }
+
+    /** Whether a name, or a pattern Elasticsearch would expand, takes in one of our own indices. */
+    static boolean reaches(String name, String own) {
+        return name.equals(own) || (name.startsWith(".") && Regex.simpleMatch(name, own));
     }
 
     private static <T> T need(T value, String what, Plan plan) {

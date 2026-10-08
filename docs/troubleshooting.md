@@ -30,7 +30,8 @@ which index you mean.
 
 **A search came back empty and the answer says there are none**
 That used to be the one failure with no symptom. Two checks now cover it: a
-query naming a field the index does not have is refused before it runs, and a
+query on one named index that uses a field the index does not have is stopped
+and handed back to the model before it runs, and a
 search that returns nothing is retried once if a word it looked for in a text
 field is really a value of a keyword field. If it still comes back empty, the
 answer is probably just empty. `"response": "raw"` shows the query it ran.

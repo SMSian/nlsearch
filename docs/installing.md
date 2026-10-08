@@ -28,7 +28,7 @@ xpack.security.enabled: false
 ## 2. The plugin
 
 ```bash
-bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.3-9.5.5/nlsearch-0.3-9.5.5.zip
+bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.31-9.5.5/nlsearch-0.31-9.5.5.zip
 ```
 
 It asks you to accept two entitlements (`outbound_network` and

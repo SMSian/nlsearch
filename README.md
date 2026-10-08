@@ -55,7 +55,7 @@ ollama pull qwen2.5-coder:7b
 Then install the plugin and restart the node:
 
 ```
-bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.3-9.5.5/nlsearch-0.3-9.5.5.zip
+bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.31-9.5.5/nlsearch-0.31-9.5.5.zip
 ```
 
 It asks you to accept two entitlements, `outbound_network` and
@@ -313,20 +313,22 @@ One request goes through these steps, all in
 If Elasticsearch rejects the plan (a field that does not exist, a malformed
 query) the model gets one more try, with the root cause of the failure stated
 immediately before the request rather than buried above the mappings, before
-you see a failure.
+you see a failure. It does not get a second try when the plugin itself refused the
+plan, so a refused "delete everything" never turns into a narrower delete.
 
 Two checks exist because Elasticsearch does not complain about either case. A
-query that names a field the index does not have is refused before it runs: such
-a query matches nothing and returns a tidy empty result, which reads as an
-answer. And a search that comes back with nothing, where a word it was looking
+query on one named index that uses a field the index does not have is stopped
+before it runs and handed back to the model with the real field names: such a
+query matches nothing and returns a tidy empty result, which reads as an
+answer. A search on `*`, a list or `_all` has no single mapping to check, so it
+is not. And a search that comes back with nothing, where a word it was looking
 for in a text field is exactly a value of some keyword field, is tried once more
 with that pointed out. Nothing correct is ever blocked by the second one, since
 by then the answer was empty anyway.
 
 A follow-up is shown the query it is following up on, next to the request rather
 than several messages back, so "now only the ones in stock" starts from what you
-were just looking at. It does not get a second try when the plugin itself refused the
-plan, so a refused "delete everything" never turns into a narrower delete.
+were just looking at.
 
 [`Models`](src/main/java/org/aeruto/nlsearch/Models.java) builds the
 [langchain4j](https://docs.langchain4j.dev) chat model from the settings in
@@ -365,13 +367,13 @@ Elasticsearch).
 
 ```
 ./gradlew test        # unit tests
-./gradlew bundle      # build/distributions/nlsearch-0.3-9.5.5.zip
+./gradlew bundle      # build/distributions/nlsearch-0.31-9.5.5.zip
 ```
 
 Try it on a local node:
 
 ```
-bin/elasticsearch-plugin install file:///path/to/nlsearch-0.3-9.5.5.zip
+bin/elasticsearch-plugin install file:///path/to/nlsearch-0.31-9.5.5.zip
 bin/elasticsearch
 ```
 
@@ -381,7 +383,7 @@ To build for another Elasticsearch version: `./gradlew bundle -PesVersion=9.5.4`
 
 A plugin only loads into the exact Elasticsearch version it was built for, so
 every release is named `<plugin version>-<elasticsearch version>`, like
-`0.3-9.5.5`. Pushing a tag `v0.3-9.5.5` makes GitHub Actions build
+`0.31-9.5.5`. Pushing a tag `v0.31-9.5.5` makes GitHub Actions build
 it for that Elasticsearch version and attach the zip to the
 [Releases](../../releases) page, and publishes the jar to
 [GitHub Packages](../../packages) as

@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -327,6 +328,19 @@ class ActionsTest extends EsLoggingTest {
     }
 
     @Test
+    void theOwnIndicesAreOffLimitsInsideAListOrBehindAPattern() {
+        assertThrows(Actions.Refused.class, () -> build("{\"action\": \"search\", \"index\": \"products,.nlsearch-history\", \"body\": {}}"));
+        assertThrows(Actions.Refused.class, () -> build("{\"action\": \"search\", \"index\": \".nlsearch-analysis, orders\", \"body\": {}}"));
+        assertThrows(Actions.Refused.class, () -> build("{\"action\": \"search\", \"index\": \".nlsearch-*\", \"body\": {}}"));
+        assertThrows(Actions.Refused.class, () -> build("{\"action\": \"search\", \"index\": \".*\", \"body\": {}}"));
+        assertThrows(Actions.Refused.class, () -> build("{\"action\": \"get_mapping\", \"index\": \".nlsearch-*\"}"));
+        // * and _all leave hidden indices out, and naming ours only to exclude it is fine
+        assertDoesNotThrow(() -> build("{\"action\": \"search\", \"index\": \"*\", \"body\": {}}"));
+        assertDoesNotThrow(() -> build("{\"action\": \"search\", \"index\": \"_all\", \"body\": {}}"));
+        assertDoesNotThrow(() -> build("{\"action\": \"search\", \"index\": \"*,-.nlsearch-history\", \"body\": {}}"));
+    }
+
+    @Test
     void deleteIndex() throws IOException {
         DeleteIndexRequest request = (DeleteIndexRequest) build("{\"action\": \"delete_index\", \"index\": \"products\"}");
         assertArrayEquals(new String[] { "products" }, request.indices());
@@ -339,6 +353,15 @@ class ActionsTest extends EsLoggingTest {
         assertThrows(Actions.Refused.class, () -> build("{\"action\": \"delete_by_query\", \"index\": \"a,b\", \"body\": {\"query\": {\"match_all\": {}}}}"));
         assertThrows(Actions.Refused.class, () -> build("{\"action\": \"update_by_query\", \"index\": \"logs-*\", \"body\": {\"query\": {\"match_all\": {}}}}"));
         assertThrows(Actions.Refused.class, () -> build("{\"action\": \"put_mapping\", \"index\": \"*\", \"body\": {\"properties\": {}}}"));
+    }
+
+    @Test
+    void aPatternOrAListIsSeveralIndices() {
+        assertTrue(Actions.several("*"));
+        assertTrue(Actions.several("logs-*"));
+        assertTrue(Actions.several("products,orders"));
+        assertTrue(Actions.several("_all"));
+        assertFalse(Actions.several("products"));
     }
 
     @Test
