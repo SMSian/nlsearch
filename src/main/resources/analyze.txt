@@ -22,8 +22,11 @@ headings exactly as they are written below and add none of your own.
 
 1. One line saying what the index is a list of.
 
-2. One line per field: the field name exactly as the mapping spells it, what it
-   holds, and what sort of question it answers.
+2. One line per field whose purpose is not obvious from its name: the field name
+   exactly as the mapping spells it, what it holds, and what sort of question it
+   answers. Skip the ones that explain themselves. Whoever reads this already has
+   the mapping, so a line saying that "price" holds the price is length without
+   meaning, and length here comes out of the room left for everything else.
 
 3. Codes:
    This is the most valuable part, so take care over it. For EVERY keyword field
@@ -100,7 +103,7 @@ headings exactly as they are written below and add none of your own.
    If this index relates to another, say how, and say they still cannot be
    queried together. Leave this out when it relates to nothing.
 
-Around 150 words per index.
+Around 120 words per index, and fewer is better than padded.
 
 Here is a whole briefing for the imaginary parcels index, showing exactly what
 is wanted. Match this layout and this level of detail. Do not reuse anything in

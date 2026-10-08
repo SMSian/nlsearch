@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import static org.elasticsearch.rest.RestRequest.Method.GET;
@@ -51,6 +52,9 @@ public class NLRestHandler extends BaseRestHandler {
 
     /** What the model is told about the cluster, in characters. The rest of the window is for the rules and the chat. */
     static final int MAX_CONTEXT_CHARS = 12_000;
+
+    /** Actions whose whole effect comes from a query, so a wrong field name silently does nothing. */
+    private static final Set<String> CHECKED = Set.of("search", "update_by_query", "delete_by_query");
 
     private final Models models;
     private final Planner planner;
@@ -231,7 +235,7 @@ public class NLRestHandler extends BaseRestHandler {
         // model rightly writes nothing for it. Store that as an answer rather than a gap:
         // a gap looks like "not analysed yet" and would be re-analysed on every request.
         for (String name : mappings.keySet()) {
-            briefings.computeIfAbsent(name, n -> "Nothing here needs decoding: the field names and values say what they mean.");
+            briefings.computeIfAbsent(name, n -> Analysis.NOTHING_TO_DECODE);
         }
         Instant now = Instant.now();
         Instant expires = now.plusMillis(NLSettings.ANALYSIS_TTL.get(settings).millis());
@@ -284,14 +288,25 @@ public class NLRestHandler extends BaseRestHandler {
                 mappings = Indices.mappings(client);
                 facts = Indices.facts(client, mappings);
                 briefings = known();
+                // an index whose values already say what they mean has a briefing on record so it
+                // is not analysed again, but sending it costs context and teaches nothing
+                briefings.values().removeIf(Analysis.NOTHING_TO_DECODE::equals);
 
                 // a briefing says what a sample document could only hint at, so one or the other
                 if (briefings.keySet().containsAll(mappings.keySet()) == false) {
                     samples = Indices.samples(client, mappings.keySet());
                 }
-                // a small model drowns in a huge prompt, so drop the least important part first
+                // A small model drowns in a huge prompt, so drop the least valuable part first.
+                // Briefings go before facts, and that order was learned the hard way: with it the
+                // other way round, four indices' briefings filled the budget, the keyword values
+                // were dropped to make room, and the model went back to matching "kitchen" against
+                // a name field. A briefing explains what a value means; the facts say what the
+                // values are. A query needs the second.
                 if (size() > MAX_CONTEXT_CHARS) {
                     samples = Map.of();
+                }
+                if (size() > MAX_CONTEXT_CHARS) {
+                    briefings = Map.of();
                 }
                 if (size() > MAX_CONTEXT_CHARS) {
                     facts = Map.of();
@@ -354,13 +369,22 @@ public class NLRestHandler extends BaseRestHandler {
                 if (readOnly && Actions.READ_ONLY.contains(plan.action()) == false) {
                     throw new Actions.Refused("a GET can only read; use POST to change data");
                 }
+                unknownFields(plan);
                 ActionRequest request = Actions.toRequest(plan, parserConfig, clusterSupportsFeature);
                 if (dryRun) {
                     finish(plan, null, RestStatus.OK, "dry run, nothing was executed");
                     return;
                 }
                 Actions.run(client, request, ActionListener.wrap(
-                    response -> finish(plan, response, Actions.status(response), Actions.summary(response)),
+                    response -> {
+                        String hint = tries < 2 && Actions.hits(response) == 0 ? searchedTheWrongField(plan) : null;
+                        if (hint != null) {
+                            history.add(new History.Turn(prompt, Planner.json(plan.toMap()), "found nothing. " + hint));
+                            offTheNetworkThread(client, channel, () -> attempt(tries + 1));
+                            return;
+                        }
+                        finish(plan, response, Actions.status(response), Actions.summary(response));
+                    },
                     e -> rejected(plan, e, tries)
                 ));
             } catch (Exception e) {
@@ -368,14 +392,119 @@ public class NLRestHandler extends BaseRestHandler {
             }
         }
 
+        /**
+         * Why a search that found nothing probably found nothing.
+         *
+         * The commonest wrong query in this whole plugin searches a text field for a word
+         * that is a value of a keyword field: "shoes" against name, when shoes is a
+         * category. It is valid, it matches nothing, and an empty result reads as an
+         * answer. The rules say not to, the values are in the prompt, and a 7B model does
+         * it anyway.
+         *
+         * So this is checked after the fact rather than before: no documents came back,
+         * and a word being searched for is exactly a value of some keyword field that the
+         * query never filtered on. Only then, and only once. Nothing is refused and no
+         * correct query is ever blocked, because by this point we know the answer was
+         * empty either way.
+         */
+        @SuppressWarnings("unchecked")
+        String searchedTheWrongField(Plan plan) {
+            if (facts.get(plan.index()) instanceof Map<?, ?> about
+                && about.get("values") instanceof Map<?, ?> values) {
+                Map<String, String> looking = Actions.matched(plan.body());
+                for (Map.Entry<String, String> each : looking.entrySet()) {
+                    for (String word : each.getValue().toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
+                        for (Map.Entry<?, ?> field : values.entrySet()) {
+                            String name = String.valueOf(field.getKey());
+                            // whether the right filter is also present does not matter: the text
+                            // search is impossible either way, and it is what returned nothing
+                            if (name.equals(each.getKey()) || word.isEmpty()) {
+                                continue;
+                            }
+                            if (field.getValue() instanceof List<?> held && held.stream()
+                                    .anyMatch(value -> String.valueOf(value).toLowerCase(Locale.ROOT).equals(word))) {
+                                return "\"" + word + "\" is a value of the keyword field [" + name + "], not a word in ["
+                                    + each.getKey() + "]. Replace that text search with a term filter on [" + name + "]."
+                                    + " Adding the filter and keeping the text search leaves the same impossible condition in place,"
+                                    + " so take the text search out unless what is left of it is really part of a name.";
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Stop a plan that filters, sorts or aggregates on a field the index does not have.
+         *
+         * Elasticsearch runs such a query happily and returns nothing, which is the one
+         * failure nobody notices: no error, a tidy empty result, and an explanation that
+         * confidently says there were none. Caught here it becomes an ordinary rejection,
+         * so the model gets one more go with the real field names in front of it.
+         *
+         * Only for reads of one existing index. A write may legitimately introduce a field,
+         * and a plan with no index or a wildcard has no single mapping to check against.
+         */
+        void unknownFields(Plan plan) {
+            if (CHECKED.contains(plan.action()) == false || plan.index() == null) {
+                return;
+            }
+            Object mapping = mappings.get(plan.index());
+            if (mapping == null) {
+                // a category or a brand used as an index name. Elasticsearch answers 404,
+                // which reaches the user as a stack-shaped error about an index they never
+                // mentioned, so say what the indices actually are instead
+                throw new IllegalArgumentException("there is no index called [" + plan.index()
+                    + "]. The indices are: " + String.join(", ", mappings.keySet())
+                    + ". A category, a brand or any other field value is never an index name.");
+            }
+            String contradiction = Actions.contradiction(plan.body());
+            if (contradiction != null) {
+                throw new IllegalArgumentException("the query both requires and excludes [" + contradiction
+                    + "], so nothing can ever match it. Asking for everything except something is one condition,"
+                    + " a must_not, not a must and a must_not together.");
+            }
+            Set<String> known = Indices.fields(mapping);
+            if (known.isEmpty()) {
+                return;
+            }
+            List<String> missing = Actions.fieldsUsed(plan.body()).stream()
+                .filter(field -> field.startsWith("_") == false)
+                .filter(field -> known.contains(field) == false)
+                .toList();
+            if (missing.isEmpty() == false) {
+                throw new IllegalArgumentException("[" + plan.index() + "] has no field "
+                    + String.join(" or ", missing) + ". Its fields are: " + String.join(", ", known)
+                    + ". Use one of those, or reply and say the data does not hold what was asked for.");
+            }
+        }
+
         // we or Elasticsearch said no to the plan
         void rejected(Plan plan, Exception e, int tries) {
-            history.add(new History.Turn(prompt, Planner.json(plan.toMap()), "failed: " + Actions.why(e)));
-            if (tries < 2 && e instanceof Actions.Refused == false) {
+            String why = Actions.why(e);
+            history.add(new History.Turn(prompt, Planner.json(plan.toMap()), "failed: " + why));
+            if (tries < allowed(why) && e instanceof Actions.Refused == false) {
                 offTheNetworkThread(client, channel, () -> attempt(tries + 1));
             } else {
                 save(() -> fail(e));
             }
+        }
+
+        /**
+         * How many attempts this kind of failure is worth.
+         *
+         * One retry for most things. Two when the JSON itself would not parse, because
+         * then nothing ran and nothing was judged: the model simply built the object
+         * wrongly, which is the one failure where trying again is pure upside and the
+         * second attempt is often right. A plan that ran and gave a poor answer gets no
+         * extra go, since repeating it only costs time.
+         */
+        int allowed(String why) {
+            String reason = why == null ? "" : why.toLowerCase(Locale.ROOT);
+            boolean couldNotBeRead = reason.contains("parse") || reason.contains("malformed")
+                || reason.contains("unknown key") || reason.contains("expected [");
+            return couldNotBeRead ? 3 : 2;
         }
 
         void finish(Plan plan, ActionResponse result, RestStatus status, String outcome) {

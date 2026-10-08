@@ -203,13 +203,15 @@ class PlannerTest extends EsLoggingTest {
             Map.of(), Map.of(), Map.of());
 
         String last = ((UserMessage) model.seen.messages().get(3)).singleText();
-        assertTrue(last.contains("This conversation is about the index \"products\""), last);
-        int said = last.indexOf("This conversation is about");
+        assertTrue(last.contains("The conversation so far has been about the index \"products\""), last);
+        int said = last.indexOf("The conversation so far has been about");
         int request = last.indexOf("Request: now only");
         assertTrue(said < request, last);
         assertTrue(request - said < 400, "it has to stay next to the request: " + last);
         // it settles the index, not the action, or "delete the products index" deletes a document again
-        assertTrue(last.contains("what to do comes from the request itself"), last);
+        assertTrue(last.contains("never what to do"), last);
+        // a cluster-wide question must not be pinned to the last index
+        assertTrue(last.contains("asks about the cluster"), last);
     }
 
     @Test
@@ -224,5 +226,43 @@ class PlannerTest extends EsLoggingTest {
     void withNoUsableHistoryNoIndexIsClaimed() {
         assertEquals(null, Planner.staying(List.of()));
         assertEquals(null, Planner.staying(List.of(new History.Turn("hi", "not json at all", "replied"))));
+    }
+
+    @Test
+    void theBodyOfTheLastAnswerIsQuotedBackForAFollowUp() {
+        FakeModel model = new FakeModel("{\"action\": \"search\", \"index\": \"products\", \"body\": {}}");
+        List<History.Turn> history = List.of(new History.Turn("red shoes",
+            "{\"action\":\"search\",\"index\":\"products\",\"body\":{\"query\":{\"term\":{\"category\":\"shoes\"}}}}", "3 hits"));
+
+        new Planner(using(model)).plan("now only the ones in stock", history,
+            Map.of("products", Map.of("properties", Map.of())), Map.of(), Map.of(), Map.of());
+
+        String last = ((UserMessage) model.seen.messages().get(3)).singleText();
+        assertTrue(last.contains("The body you sent last time was"), last);
+        assertTrue(last.contains("\"category\":\"shoes\""), last);
+        assertTrue(last.contains("changes only what the request asks for"), last);
+    }
+
+    @Test
+    void anAnswerWithNoBodyQuotesNothingBack() {
+        List<History.Turn> history = List.of(
+            new History.Turn("what indices are there", "{\"action\":\"list_indices\"}", "3 indices"),
+            new History.Turn("show products", "{\"action\":\"search\",\"index\":\"products\"}", "3 hits"));
+        Plan previous = Planner.previous(history);
+        assertEquals("products", previous.index());
+        assertEquals("products", Planner.staying(history));
+    }
+
+    @Test
+    void aRetryIsNeverToldToStartFromTheQueryThatJustFailed() {
+        List<History.Turn> history = List.of(
+            new History.Turn("shoes", "{\"action\":\"search\",\"index\":\"products\",\"body\":{\"query\":{\"term\":{\"category\":\"shoes\"}}}}", "3 hits"),
+            new History.Turn("any chair", "{\"action\":\"search\",\"index\":\"furniture\",\"body\":{}}", "failed: there is no index called [furniture]"));
+
+        // the good turn, not the one that just blew up
+        assertEquals("products", Planner.previous(history).index());
+        assertFalse(Planner.worked("failed: no such index"));
+        assertFalse(Planner.worked("found nothing. \"shoes\" is a value of [category]"));
+        assertTrue(Planner.worked("3 hits"));
     }
 }

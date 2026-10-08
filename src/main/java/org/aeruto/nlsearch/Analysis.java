@@ -42,6 +42,15 @@ final class Analysis {
     static final String INDEX = ".nlsearch-analysis";
     static final String PATTERN = INDEX + "*";
 
+    /**
+     * Stored for an index whose values already say what they mean.
+     *
+     * It is stored rather than left blank so the index is not analysed again on every
+     * request, and it is never sent to the model, which would learn nothing from it
+     * that the mapping does not already say.
+     */
+    static final String NOTHING_TO_DECODE = "Nothing here needs decoding: the field names and values say what they mean.";
+
     private static final Logger logger = LogManager.getLogger(Analysis.class);
 
     /** What was learned about one index, and whether it still applies. */

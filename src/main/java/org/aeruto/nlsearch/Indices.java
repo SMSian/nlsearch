@@ -246,6 +246,37 @@ final class Indices {
         return -1;   // unknown is not empty: analyse it and find out
     }
 
+    /**
+     * Every field name a query may legally mention for this index, including the
+     * sub-fields a text field declares, so "name.keyword" is as valid as "name".
+     *
+     * Used to catch a plan that filters on something the index does not have before
+     * it is run. Elasticsearch does not complain about such a query: it matches
+     * nothing and returns a perfectly good empty result, which is the one failure
+     * nobody notices.
+     */
+    static Set<String> fields(Object mapping) {
+        Set<String> names = new LinkedHashSet<>();
+        collect(mapping, "", names);
+        return names;
+    }
+
+    private static void collect(Object mapping, String prefix, Set<String> into) {
+        if (mapping instanceof Map<?, ?> map && map.get("properties") instanceof Map<?, ?> properties) {
+            properties.forEach((name, definition) -> {
+                String path = prefix.isEmpty() ? String.valueOf(name) : prefix + "." + name;
+                into.add(path);
+                if (definition instanceof Map<?, ?> field) {
+                    // a text field can declare sub-fields; an object field nests properties
+                    if (field.get("fields") instanceof Map<?, ?> subs) {
+                        subs.keySet().forEach(sub -> into.add(path + "." + sub));
+                    }
+                    collect(field, path, into);
+                }
+            });
+        }
+    }
+
     /** Field name to type, for the fields worth summarising. */
     static Map<String, String> summarisable(Object mapping) {
         Map<String, String> fields = new LinkedHashMap<>();

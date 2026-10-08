@@ -55,7 +55,7 @@ ollama pull qwen2.5-coder:7b
 Then install the plugin and restart the node:
 
 ```
-bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.2-9.5.5/nlsearch-0.2-9.5.5.zip
+bin/elasticsearch-plugin install https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.3-9.5.5/nlsearch-0.3-9.5.5.zip
 ```
 
 It asks you to accept two entitlements, `outbound_network` and
@@ -173,9 +173,11 @@ POST /_nl/analyze
 From then on "how much equipment do we stock" becomes `{"term": {"dept": "EQ"}}`
 instead of a guess.
 
-It writes down what the codes mean, not what the data contains: an index whose
+It writes down what the codes mean, not what the data contains. An index whose
 values are already plain English gets a one-line briefing saying there was
-nothing to decode, because every keyword value is sent with each request anyway.
+nothing to decode, which is recorded so the index is not analysed again and is
+never sent to the model: every keyword value is sent with each request anyway,
+so repeating them would only take room from something that earns it.
 
 You do not have to call it. The first question about an index triggers it, and
 the result is kept in `.nlsearch-analysis`, so only that first question pays.
@@ -311,7 +313,19 @@ One request goes through these steps, all in
 If Elasticsearch rejects the plan (a field that does not exist, a malformed
 query) the model gets one more try, with the root cause of the failure stated
 immediately before the request rather than buried above the mappings, before
-you see a failure. It does not get a second try when the plugin itself refused the
+you see a failure.
+
+Two checks exist because Elasticsearch does not complain about either case. A
+query that names a field the index does not have is refused before it runs: such
+a query matches nothing and returns a tidy empty result, which reads as an
+answer. And a search that comes back with nothing, where a word it was looking
+for in a text field is exactly a value of some keyword field, is tried once more
+with that pointed out. Nothing correct is ever blocked by the second one, since
+by then the answer was empty anyway.
+
+A follow-up is shown the query it is following up on, next to the request rather
+than several messages back, so "now only the ones in stock" starts from what you
+were just looking at. It does not get a second try when the plugin itself refused the
 plan, so a refused "delete everything" never turns into a narrower delete.
 
 [`Models`](src/main/java/org/aeruto/nlsearch/Models.java) builds the
@@ -329,7 +343,7 @@ Things worth knowing:
 - Every rule in [`prompt.txt`](src/main/resources/prompt.txt) is written to say
   how to find an answer, never what the answer is. None of them names a field
   from any particular dataset, because a rule that does only helps a dataset
-  with that field. That is the whole difference between 0.1 and 0.2.
+  with that field. That is the whole difference between 0.1 and what came after.
 - Settings go in `elasticsearch.yml` or in `PUT _cluster/settings`. The API key
   is hidden from `GET _cluster/settings` and `GET _nodes/settings` either way.
 - Requests of one session should be sent one after another; two at the same
@@ -351,13 +365,13 @@ Elasticsearch).
 
 ```
 ./gradlew test        # unit tests
-./gradlew bundle      # build/distributions/nlsearch-0.2-9.5.5.zip
+./gradlew bundle      # build/distributions/nlsearch-0.3-9.5.5.zip
 ```
 
 Try it on a local node:
 
 ```
-bin/elasticsearch-plugin install file:///path/to/nlsearch-0.2-9.5.5.zip
+bin/elasticsearch-plugin install file:///path/to/nlsearch-0.3-9.5.5.zip
 bin/elasticsearch
 ```
 
@@ -367,7 +381,7 @@ To build for another Elasticsearch version: `./gradlew bundle -PesVersion=9.5.4`
 
 A plugin only loads into the exact Elasticsearch version it was built for, so
 every release is named `<plugin version>-<elasticsearch version>`, like
-`0.2-9.5.5`. Pushing a tag `v0.2-9.5.5` makes GitHub Actions build
+`0.3-9.5.5`. Pushing a tag `v0.3-9.5.5` makes GitHub Actions build
 it for that Elasticsearch version and attach the zip to the
 [Releases](../../releases) page, and publishes the jar to
 [GitHub Packages](../../packages) as

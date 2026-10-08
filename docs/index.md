@@ -56,7 +56,7 @@ With [Ollama](https://ollama.com) running and Elasticsearch 9.5.5 installed:
 
 ```bash
 ollama pull qwen2.5-coder:7b
-bin/elasticsearch-plugin install --batch https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.2-9.5.5/nlsearch-0.2-9.5.5.zip
+bin/elasticsearch-plugin install --batch https://github.com/sheikmohammedsha/nlsearch/releases/download/v0.3-9.5.5/nlsearch-0.3-9.5.5.zip
 bin/elasticsearch
 ```
 
@@ -89,6 +89,12 @@ If Elasticsearch rejects the plan the model gets one more try, with the root
 cause of the failure stated immediately before the request. If the plugin itself
 refused the plan, there is no second try, so a refused "delete everything" never
 turns into a narrower delete.
+
+Two things Elasticsearch would not complain about are caught anyway. A query
+naming a field the index does not have is refused before it runs, because such a
+query matches nothing and the empty result reads as an answer. And a search that
+found nothing, where a word it looked for in a text field is a value of some
+keyword field, gets one more try with that pointed out.
 
 If two different fields would each answer the words and nothing says which is
 meant, the answer is `"action": "reply"` and a question back rather than a
@@ -129,7 +135,8 @@ the result is kept, so only that first question pays. It is redone when the
 mapping changes or after `nlsearch.analysis_ttl`, 24 hours by default. It writes
 down what codes mean, not what the data contains, so an index whose values are
 already plain English gets a one-line briefing saying there was nothing to
-decode. An index with nothing in it is skipped and analysed once it has
+decode; that is recorded so it is not analysed again, and never sent to the
+model. An index with nothing in it is skipped and analysed once it has
 documents. Pass a
 `session` to keep a briefing for one conversation alone.
 

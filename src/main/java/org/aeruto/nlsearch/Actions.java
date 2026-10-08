@@ -46,6 +46,7 @@ import org.elasticsearch.xcontent.XContentParserConfiguration;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -245,6 +246,172 @@ final class Actions {
             }
         }
         return "document " + id;
+    }
+
+    // the query clauses that read "<clause>": {"<field>": ...}
+    private static final Set<String> FIELD_KEYED = Set.of(
+        "term", "terms", "match", "match_phrase", "match_phrase_prefix", "match_bool_prefix",
+        "prefix", "wildcard", "regexp", "fuzzy", "range");
+
+    // the bool clauses that hold more clauses rather than a field
+    private static final Set<String> RECURSE = Set.of(
+        "bool", "must", "should", "must_not", "filter", "constant_score");
+
+    /**
+     * Every field a plan's body mentions.
+     *
+     * Only the shapes we know are read; anything unrecognised is ignored. That is
+     * deliberate, because this feeds a check that refuses the plan, and a false
+     * positive there would reject a query that would have worked.
+     */
+    static Set<String> fieldsUsed(Map<String, Object> body) {
+        Set<String> used = new LinkedHashSet<>();
+        if (body == null) {
+            return used;
+        }
+        query(body.get("query"), used);
+        sort(body.get("sort"), used);
+        aggregations(body.get("aggs") == null ? body.get("aggregations") : body.get("aggs"), used);
+        if (body.get("_source") instanceof List<?> fields) {
+            fields.forEach(f -> used.add(String.valueOf(f)));
+        }
+        return used;
+    }
+
+    private static void query(Object clause, Set<String> used) {
+        if (clause instanceof List<?> list) {
+            list.forEach(each -> query(each, used));
+            return;
+        }
+        if (clause instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> {
+                String name = String.valueOf(key);
+                if (RECURSE.contains(name)) {
+                    query(value, used);
+                } else if (name.equals("exists") && value instanceof Map<?, ?> exists && exists.get("field") != null) {
+                    used.add(String.valueOf(exists.get("field")));
+                } else if (FIELD_KEYED.contains(name) && value instanceof Map<?, ?> fields) {
+                    fields.keySet().forEach(field -> used.add(String.valueOf(field)));
+                } else if (name.equals("multi_match") && value instanceof Map<?, ?> multi
+                           && multi.get("fields") instanceof List<?> fields) {
+                    // a multi_match field may carry a boost, as in "name^3"
+                    fields.forEach(field -> used.add(String.valueOf(field).replaceAll("\\^.*$", "")));
+                }
+            });
+        }
+    }
+
+    private static void sort(Object sort, Set<String> used) {
+        if (sort instanceof List<?> list) {
+            list.forEach(each -> sort(each, used));
+        } else if (sort instanceof Map<?, ?> map) {
+            map.keySet().forEach(field -> used.add(String.valueOf(field)));
+        } else if (sort instanceof String field && field.equals("_score") == false) {
+            used.add(field);
+        }
+    }
+
+    private static void aggregations(Object aggs, Set<String> used) {
+        if (aggs instanceof Map<?, ?> map) {
+            map.values().forEach(body -> {
+                if (body instanceof Map<?, ?> aggregation) {
+                    aggregation.forEach((type, settings) -> {
+                        String name = String.valueOf(type);
+                        if (name.equals("aggs") || name.equals("aggregations")) {
+                            aggregations(settings, used);
+                        } else if (settings instanceof Map<?, ?> detail && detail.get("field") != null) {
+                            used.add(String.valueOf(detail.get("field")));
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    /**
+     * A condition that appears both as something to match and something to exclude.
+     *
+     * {"must": [{"term": {"brand": "Pixel"}}], "must_not": [{"term": {"brand": "Pixel"}}]}
+     * is a query that can never match anything, and Elasticsearch runs it without a word.
+     * It comes from reading "any electronics other than Pixel" as two instructions rather
+     * than one, which a small model does often enough to be worth catching.
+     */
+    static String contradiction(Map<String, Object> body) {
+        if (body == null) {
+            return null;
+        }
+        Set<String> wanted = new LinkedHashSet<>();
+        Set<String> excluded = new LinkedHashSet<>();
+        conditions(body.get("query"), false, wanted, excluded);
+        for (String each : wanted) {
+            if (excluded.contains(each)) {
+                return each.replace('\u0000', ' ');
+            }
+        }
+        return null;
+    }
+
+    private static void conditions(Object clause, boolean negated, Set<String> wanted, Set<String> excluded) {
+        if (clause instanceof List<?> list) {
+            list.forEach(each -> conditions(each, negated, wanted, excluded));
+            return;
+        }
+        if (clause instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> {
+                String name = String.valueOf(key);
+                if (name.equals("must_not")) {
+                    conditions(value, true, wanted, excluded);
+                } else if (RECURSE.contains(name)) {
+                    conditions(value, negated, wanted, excluded);
+                } else if (name.equals("term") && value instanceof Map<?, ?> fields) {
+                    fields.forEach((field, held) -> {
+                        Object exact = held instanceof Map<?, ?> detail ? detail.get("value") : held;
+                        String pair = field + "\u0000" + exact;
+                        (negated ? excluded : wanted).add(pair);
+                    });
+                }
+            });
+        }
+    }
+
+    /** How many documents a search matched, or -1 if this was not a search. */
+    static long hits(ActionResponse response) {
+        if (response instanceof SearchResponse search && search.getHits().getTotalHits() != null) {
+            return search.getHits().getTotalHits().value();
+        }
+        return -1;
+    }
+
+    /** The words each match clause is looking for, by the field it is looking in. */
+    static Map<String, String> matched(Map<String, Object> body) {
+        Map<String, String> looking = new LinkedHashMap<>();
+        if (body != null) {
+            matches(body.get("query"), looking);
+        }
+        return looking;
+    }
+
+    private static void matches(Object clause, Map<String, String> into) {
+        if (clause instanceof List<?> list) {
+            list.forEach(each -> matches(each, into));
+            return;
+        }
+        if (clause instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> {
+                String name = String.valueOf(key);
+                if (RECURSE.contains(name)) {
+                    matches(value, into);
+                } else if ((name.equals("match") || name.equals("match_phrase") || name.equals("multi_match"))
+                           && value instanceof Map<?, ?> fields) {
+                    fields.forEach((field, wanted) -> {
+                        Object text = wanted instanceof Map<?, ?> detail ? detail.get("query") : wanted;
+                        if (text != null) {
+                            into.put(String.valueOf(field), String.valueOf(text));
+                        }
+                    });
+                }
+            });
+        }
     }
 
     /** One line on how it went, for the chat history. */

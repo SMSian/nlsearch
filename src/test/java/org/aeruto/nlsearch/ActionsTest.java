@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -408,5 +409,83 @@ class ActionsTest extends EsLoggingTest {
     void aRepeatedReasonIsNotSaidTwice() {
         Exception root = new IllegalArgumentException("same words");
         assertEquals("same words", Actions.why(new IllegalStateException("same words", root)));
+    }
+
+    @Test
+    void theFieldsAQueryUsesAreFound() {
+        Map<String, Object> body = Map.of(
+            "query", Map.of("bool", Map.of(
+                "must", List.of(Map.of("match", Map.of("name", "red"))),
+                "filter", List.of(Map.of("term", Map.of("category", "shoes")),
+                                  Map.of("range", Map.of("price", Map.of("lt", 50)))),
+                "must_not", List.of(Map.of("exists", Map.of("field", "discontinued"))))),
+            "sort", List.of(Map.of("added", "desc")),
+            "aggs", Map.of("per_brand", Map.of("terms", Map.of("field", "brand"))));
+
+        assertEquals(Set.of("name", "category", "price", "discontinued", "added", "brand"),
+                     Actions.fieldsUsed(body));
+    }
+
+    @Test
+    void aggregationsInsideAggregationsAreFoundToo() {
+        Map<String, Object> body = Map.of("aggs", Map.of(
+            "per_category", Map.of("terms", Map.of("field", "category"),
+                                   "aggs", Map.of("average", Map.of("avg", Map.of("field", "price"))))));
+        assertEquals(Set.of("category", "price"), Actions.fieldsUsed(body));
+    }
+
+    @Test
+    void aShapeWeDoNotRecogniseIsIgnoredRatherThanGuessedAt() {
+        // this feeds a check that refuses a plan, so a false positive would reject
+        // a query that would have worked. Unknown shapes contribute nothing.
+        assertEquals(Set.of(), Actions.fieldsUsed(Map.of("query", Map.of("match_all", Map.of()))));
+        assertEquals(Set.of(), Actions.fieldsUsed(Map.of("query", Map.of("ids", Map.of("values", List.of("1"))))));
+        assertEquals(Set.of(), Actions.fieldsUsed(null));
+    }
+
+    @Test
+    void theWordsEachMatchClauseIsLookingForAreFound() {
+        Map<String, Object> body = Map.of("query", Map.of("bool", Map.of(
+            "must", List.of(Map.of("match", Map.of("name", Map.of("query", "red shoes", "operator", "and")))),
+            "should", List.of(Map.of("match_phrase", Map.of("description", "induction hob"))))));
+        Map<String, String> looking = Actions.matched(body);
+        assertEquals("red shoes", looking.get("name"));
+        assertEquals("induction hob", looking.get("description"));
+    }
+
+    @Test
+    void aQueryWithNoMatchClauseIsLookingForNothing() {
+        assertEquals(Map.of(), Actions.matched(Map.of("query", Map.of("term", Map.of("category", "shoes")))));
+        assertEquals(Map.of(), Actions.matched(null));
+    }
+
+    @Test
+    void aQueryThatRequiresAndExcludesTheSameThingIsCaught() {
+        Map<String, Object> body = Map.of("query", Map.of("bool", Map.of(
+            "must", List.of(Map.of("term", Map.of("category", "electronics")),
+                            Map.of("term", Map.of("brand", "Pixel"))),
+            "must_not", List.of(Map.of("term", Map.of("brand", "Pixel"))))));
+        assertEquals("brand Pixel", Actions.contradiction(body));
+    }
+
+    @Test
+    void anOrdinaryExclusionIsNotAContradiction() {
+        Map<String, Object> body = Map.of("query", Map.of("bool", Map.of(
+            "must", List.of(Map.of("term", Map.of("category", "electronics"))),
+            "must_not", List.of(Map.of("term", Map.of("brand", "Pixel"))))));
+        assertNull(Actions.contradiction(body));
+        assertNull(Actions.contradiction(Map.of("query", Map.of("match_all", Map.of()))));
+        assertNull(Actions.contradiction(null));
+    }
+
+    @Test
+    void theNewRulesNameNoFieldFromAnyParticularDataset() {
+        // the rules have to work on an index nobody has seen. Field names appear only
+        // inside the block that is explicitly introduced as an imaginary example.
+        String rules = Planner.INSTRUCTIONS.substring(Planner.INSTRUCTIONS.indexOf("Rules."),
+                                                      Planner.INSTRUCTIONS.indexOf("The mistakes that get made"));
+        for (String borrowed : new String[] { "in_stock", "stock_count", "signed_up", "lifetime_value", "vip" }) {
+            assertFalse(rules.contains(borrowed), "the rules still mention " + borrowed);
+        }
     }
 }

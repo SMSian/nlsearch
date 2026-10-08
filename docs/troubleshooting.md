@@ -28,6 +28,13 @@ Name the index in the prompt ("in products, ..."). With more than 20 indices
 the prompt only carries names, so field based guessing stops working; say
 which index you mean.
 
+**A search came back empty and the answer says there are none**
+That used to be the one failure with no symptom. Two checks now cover it: a
+query naming a field the index does not have is refused before it runs, and a
+search that returns nothing is retried once if a word it looked for in a text
+field is really a value of a keyword field. If it still comes back empty, the
+answer is probably just empty. `"response": "raw"` shows the query it ran.
+
 **It picked the wrong field, or invented a value**
 Your fields are probably codes rather than words: a `dept` of `FW` instead of a
 `category` of `footwear`. Run `POST /_nl/analyze` once. It reads the mappings

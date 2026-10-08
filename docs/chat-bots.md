@@ -180,7 +180,8 @@ a model asked to guess will guess confidently and wrongly.
 their coded values mean. It happens automatically on the first question and is
 then kept, so a bot does not have to do anything. It only decodes: an index
 whose values are already words gets a one-line briefing saying there was nothing
-to decode, because every keyword value is sent with each request anyway. Two
+to decode, recorded so the index is not looked at again and never sent to the
+model, because every keyword value is sent with each request anyway. Two
 things are worth doing deliberately though:
 
 - **Call it once at deploy time**, so the first person to ask a question does not

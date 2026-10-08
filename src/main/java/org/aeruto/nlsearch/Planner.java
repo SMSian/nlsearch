@@ -65,7 +65,7 @@ class Planner {
             happened = "(what happened with that: " + turn.outcome() + ")\n\n";
             lastOutcome = turn.outcome();
         }
-        messages.add(UserMessage.from(context(request, mappings, facts, samples, briefings, lastOutcome, staying(history))));
+        messages.add(UserMessage.from(context(request, mappings, facts, samples, briefings, lastOutcome, previous(history))));
         return messages;
     }
 
@@ -79,18 +79,37 @@ class Planner {
      * lines up competes badly with a briefing; the name of the index, given here,
      * does not have to compete with anything.
      */
-    static String staying(List<History.Turn> history) {
+    static Plan previous(List<History.Turn> history) {
         for (int i = history.size() - 1; i >= 0; i--) {
+            History.Turn turn = history.get(i);
+            // never build on a turn that did not work. A retry is told not to send the same
+            // JSON again, and quoting the JSON that just failed as the thing to start from
+            // says the opposite, louder and closer to the request. That cost several
+            // retries their entire purpose before it was spotted.
+            if (worked(turn.outcome()) == false) {
+                continue;
+            }
             try {
-                String index = Plan.parse(history.get(i).answer()).index();
-                if (index != null && index.isBlank() == false) {
-                    return index;
+                Plan plan = Plan.parse(turn.answer());
+                if (plan.index() != null && plan.index().isBlank() == false) {
+                    return plan;
                 }
             } catch (Exception e) {
                 // an answer we can no longer read tells us nothing; look further back
             }
         }
         return null;
+    }
+
+    /** An outcome the plugin wrote to say the attempt went nowhere. */
+    static boolean worked(String outcome) {
+        return outcome == null || (outcome.startsWith("failed:") == false && outcome.startsWith("found nothing") == false);
+    }
+
+    /** The index of the last answer that named one, or null. */
+    static String staying(List<History.Turn> history) {
+        Plan plan = previous(history);
+        return plan == null ? null : plan.index();
     }
 
     /**
@@ -112,7 +131,7 @@ class Planner {
 
     static String context(String request, Map<String, Object> mappings, Map<String, Object> facts,
                           Map<String, Object> samples, Map<String, String> briefings,
-                          String lastOutcome, String staying) {
+                          String lastOutcome, Plan previous) {
         StringBuilder text = new StringBuilder();
         if (briefings.isEmpty() == false) {
             // the most valuable thing here: what the fields and the coded values actually mean
@@ -131,10 +150,22 @@ class Planner {
                 .append("The spans tell you what the data really covers, so do not filter on a range that falls outside them.\n\n");
         }
         text.append(dates()).append("\n");
-        if (staying != null) {
-            text.append("This conversation is about the index \"").append(staying)
-                .append("\". Unless the request below names a different index, answer about that one. ")
-                .append("That settles the index and nothing else: what to do comes from the request itself.\n\n");
+        if (previous != null) {
+            text.append("The conversation so far has been about the index \"").append(previous.index())
+                .append("\". If the request below is a follow-up, it is about that index too. ")
+                .append("It is not, if the request names another index, or asks about the cluster rather than ")
+                .append("documents in it. This settles which index, never what to do: that comes from the request.\n");
+            if (previous.action().equals("search") && previous.body() != null && previous.body().isEmpty() == false) {
+                // the body, not just the index: "now only the ones in stock" has to start from the
+                // query it is narrowing, and quoting it beats hoping the model rereads the chat.
+                // Searches only. Putting a delete's body this close to the next request is how you
+                // get "delete the products index" answered by repeating the last delete.
+                text.append("The body you sent last time was ").append(json(previous.body()))
+                    .append(". A follow-up starts from that and changes only what the request asks for;")
+                    .append(" anything the request does not mention stays exactly as it is. Changing it includes")
+                    .append(" adding what the new request needs, such as a sort, a size or an aggregation.\n");
+            }
+            text.append("\n");
         }
         if (lastOutcome != null && lastOutcome.isEmpty() == false) {
             text.append(followUp(lastOutcome)).append("\n\n");
